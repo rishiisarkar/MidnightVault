@@ -2,6 +2,7 @@ export type GateRecord = {
   id: string;
   name: string;
   description: string;
+  privateContent: string;
   network: "preprod" | "undeployed";
   contractId: string | null;
   deploymentTxId: string | null;
@@ -20,6 +21,7 @@ export const DEFAULT_GATE: GateRecord = {
   id: "genesis",
   name: "Genesis Vault",
   description: "A private launch room for approved Nexora members.",
+  privateContent: "Welcome to the private launch room.\n\nMembers-only resources will appear here after verification.",
   network: "preprod",
   contractId: CONFIGURED_CONTRACT_ID,
   deploymentTxId: null,
@@ -65,10 +67,14 @@ export function formatContractId(value: string): string {
 /** Migrate any gate records that still store `0x...` contract ids. */
 function sanitizeGate(gate: GateRecord): GateRecord {
   const network: GateRecord["network"] = "preprod";
-  if (!gate.contractId) return { ...gate, network };
+  const privateContent =
+    typeof gate.privateContent === "string" && gate.privateContent.trim()
+      ? gate.privateContent
+      : DEFAULT_GATE.privateContent;
+  if (!gate.contractId) return { ...gate, network, privateContent };
   const bare = normalizeContractId(gate.contractId);
-  if (bare === gate.contractId) return { ...gate, network };
-  return { ...gate, network, contractId: bare || null };
+  if (bare === gate.contractId) return { ...gate, network, privateContent };
+  return { ...gate, network, privateContent, contractId: bare || null };
 }
 
 /**
@@ -140,6 +146,7 @@ export function restorePublishedGate(input: {
   contractId: string;
   name?: string;
   description?: string;
+  privateContent?: string;
   network?: GateRecord["network"];
   deploymentTxId?: string | null;
   id?: string;
@@ -156,6 +163,7 @@ export function restorePublishedGate(input: {
     id,
     name: (input.name?.trim() || previous.name || DEFAULT_GATE.name).slice(0, 80),
     description: (input.description?.trim() || previous.description || DEFAULT_GATE.description).slice(0, 500),
+    privateContent: (input.privateContent?.trim() || previous.privateContent || DEFAULT_GATE.privateContent).slice(0, 2000),
     network: "preprod",
     contractId,
     deploymentTxId: input.deploymentTxId ?? previous.deploymentTxId ?? null,
@@ -186,6 +194,7 @@ export function resolveGate(params: GateSearchParams = {}): GateRecord {
       id: fromStore?.id ?? gateParam ?? gateIdFromContract(contractId),
       name,
       description,
+      privateContent: fromStore?.privateContent || DEFAULT_GATE.privateContent,
       network,
       contractId,
       deploymentTxId: fromStore?.deploymentTxId ?? null,

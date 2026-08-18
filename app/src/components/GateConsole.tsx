@@ -23,6 +23,7 @@ import {
   type AccessVerificationResult,
   type SessionInfo,
   type TransactionProgressStage,
+  type WalletActionResult,
   type WalletOption,
 } from "@/lib/midnight-client";
 import {
@@ -39,7 +40,7 @@ import {
   type GateRecord,
 } from "@/lib/gate-store";
 import { explorerContractUrl, explorerTransactionUrl } from "@/lib/explorer";
-import { markGateUnlocked } from "@/lib/access-session";
+import { getGateAccess, markGateUnlocked } from "@/lib/access-session";
 import { ProgressPanel } from "@/components/ui/ProgressPanel";
 import { ProofReference } from "@/components/ui/ProofReference";
 import { StatusBanner, StageBadge, type StatusTone } from "@/components/ui/StatusBanner";
@@ -105,6 +106,27 @@ function statusFromError(error: unknown): UiStatus {
     title: "Action failed",
     message: MidnightClient.messageFor(error),
   };
+}
+
+function logWalletActionUi(
+  action: "credential_enrollment" | "access_verification",
+  result: WalletActionResult,
+  finalState: string,
+): void {
+  if (process.env.NODE_ENV === "production") return;
+  try {
+    console.info("[Nexora:wallet-action-ui]", {
+      action,
+      wallet: result.wallet,
+      success: result.success,
+      confirmed: result.confirmed,
+      txHashPresent: Boolean(result.txHash),
+      status: result.status,
+      finalState,
+    });
+  } catch {
+    // diagnostics only
+  }
 }
 
 function randomCredential(): string {
@@ -264,6 +286,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
   const [localGate, setLocalGate] = useState<GateRecord | null>(null);
   const [gateName, setGateName] = useState(resolvedGate.name);
   const [gateDescription, setGateDescription] = useState(resolvedGate.description);
+  const [privateContent, setPrivateContent] = useState(resolvedGate.privateContent);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [walletName, setWalletName] = useState<string | null>(null);
   const [walletRdns, setWalletRdns] = useState<string | null>(null);
@@ -273,6 +296,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
   const [walletConnecting, setWalletConnecting] = useState(false);
   const [credential, setCredential] = useState("");
   const [credentialIssued, setCredentialIssued] = useState(false);
+  const [accessGranted, setAccessGranted] = useState(false);
   const [restoreAddress, setRestoreAddress] = useState("");
   const [stage, setStage] = useState<ProgressStage>("idle");
   const [actionContext, setActionContext] = useState<ActionContext>("prove");
@@ -321,9 +345,11 @@ export function GateConsole({ mode }: GateConsoleProps) {
   useEffect(() => {
     setGateName(resolvedGate.name);
     setGateDescription(resolvedGate.description);
+    setPrivateContent(resolvedGate.privateContent);
     setLocalGate(null);
     setCredentialIssued(false);
-  }, [resolvedGate.id, resolvedGate.name, resolvedGate.description, resolvedGate.contractId]);
+    setAccessGranted(Boolean(getGateAccess(resolvedGate.id)));
+  }, [resolvedGate.id, resolvedGate.name, resolvedGate.description, resolvedGate.privateContent, resolvedGate.contractId]);
 
   useEffect(() => {
     setWallets(client.getInjectedWallets());
@@ -357,6 +383,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
             contractId: lookup.resolvedAddress,
             name: gateName,
             description: gateDescription,
+            privateContent,
             deploymentTxId: current.deploymentTxId,
           });
           setLocalGate(restored);
@@ -383,6 +410,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
       ...current,
       name: gateName.trim().slice(0, 80) || DEFAULT_GATE.name,
       description: gateDescription.trim().slice(0, 500) || DEFAULT_GATE.description,
+      privateContent: privateContent.trim().slice(0, 2000) || DEFAULT_GATE.privateContent,
       network: "preprod",
     };
     saveGate(next);
@@ -446,6 +474,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
             contractId: existing.resolvedAddress,
             name: gateName,
             description: gateDescription,
+            privateContent,
             deploymentTxId: current.deploymentTxId,
           });
           setLocalGate(restored);
@@ -470,6 +499,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
         deploymentTxId: deployed.txId,
         name: gateName,
         description: gateDescription,
+        privateContent,
       });
       setLocalGate(next);
       setContractStatus("published");
@@ -499,10 +529,12 @@ export function GateConsole({ mode }: GateConsoleProps) {
         contractId: lookup.resolvedAddress,
         name: gateName,
         description: gateDescription,
+        privateContent,
       });
       setLocalGate(restored);
       setGateName(restored.name);
       setGateDescription(restored.description);
+      setPrivateContent(restored.privateContent);
       setContractStatus("published");
       setStage("idle");
       setStatus({
@@ -529,7 +561,8 @@ export function GateConsole({ mode }: GateConsoleProps) {
       if (!client.addresses) await client.loadWalletAddresses();
       const secret = parseCredential(credential);
       const result = await client.addCredential(secret, current.contractId, setStage as (stage: TransactionProgressStage) => void);
-      if (result.txId) {
+      if (!result.success) throw new Error("CREDENTIAL_SUBMIT:Wallet did not submit the credential enrollment.");
+      if (!result.alreadyEnrolled) {
         setStage("confirming");
         setStatus({
           tone: "busy",
@@ -537,17 +570,25 @@ export function GateConsole({ mode }: GateConsoleProps) {
           message: "Waiting for the Preprod indexer to confirm the credential enrollment.",
         });
         await client.waitForCredentialEnrollment(current.contractId, result.credentialHash);
-        setLastTx(result.txId);
       }
+      const confirmedResult = {
+        ...result,
+        confirmed: true,
+        status: result.alreadyEnrolled ? result.status : "confirmed",
+      };
       setCredentialIssued(true);
+      if (confirmedResult.txHash) setLastTx(confirmedResult.txHash);
       setStage("confirmed");
       setStatus({
         tone: "success",
-        title: result.alreadyEnrolled ? "Credential already enrolled" : "Credential enrolled",
-        message: result.alreadyEnrolled
+        title: confirmedResult.alreadyEnrolled ? "Credential already enrolled" : "Credential enrolled",
+        message: confirmedResult.alreadyEnrolled
           ? "The Preprod indexer already has this credential in the gate allowlist."
-          : "The Preprod indexer confirmed this credential enrollment.",
+          : confirmedResult.txHash
+            ? "The Preprod indexer confirmed this credential enrollment."
+            : `The Preprod indexer confirmed this credential enrollment. Confirmed by ${confirmedResult.wallet === "1am" ? "1AM Wallet" : "the wallet"}.`,
       });
+      logWalletActionUi("credential_enrollment", confirmedResult, "credential_enrolled");
     } catch (error) {
       setStage("error");
       setStatus(statusFromError(error));
@@ -577,21 +618,28 @@ export function GateConsole({ mode }: GateConsoleProps) {
         await client.waitForTransaction(result.txHash);
         setLastTx(result.txHash);
       }
+      const confirmedResult = {
+        ...result,
+        confirmed: true,
+        status: "confirmed",
+      };
       markGateUnlocked({
         gateId: current.id,
         contractId: current.contractId,
-        txId: result.txHash ?? null,
+        txId: confirmedResult.txHash ?? null,
         unlockedAt: Date.now(),
       });
+      setAccessGranted(true);
       setCredential("");
       setStage("confirmed");
       setStatus({
         tone: "success",
         title: "Access granted",
-        message: result.txHash
+        message: confirmedResult.txHash
           ? `Your membership was verified for ${current.name} without revealing your private credential.`
-          : `Your membership was verified for ${current.name} without revealing your private credential. Verification confirmed by ${result.wallet === "1am" ? "1AM Wallet" : "the wallet"}.`,
+          : `Your membership was verified for ${current.name} without revealing your private credential. Verification confirmed by ${confirmedResult.wallet === "1am" ? "1AM Wallet" : "the wallet"}.`,
       });
+      logWalletActionUi("access_verification", confirmedResult, "access_granted");
     } catch (error) {
       setStage("error");
       setStatus(statusFromError(error));
@@ -607,6 +655,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
     setWalletRdns(null);
     setWalletInjectionKey(null);
     setWalletConnecting(false);
+    setAccessGranted(false);
     setStage("idle");
     setStatus({
       tone: "neutral",
@@ -694,7 +743,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
                   />
                 </label>
                 <label className="mt-5 block">
-                  <span className="field-label">What will members open?</span>
+                  <span className="field-label">Public description</span>
                   <textarea
                     className="field-input mt-2 min-h-28 resize-y"
                     value={gateDescription}
@@ -703,6 +752,17 @@ export function GateConsole({ mode }: GateConsoleProps) {
                   />
                 </label>
                 <p className="mt-3 text-xs leading-5 text-faint">Avoid secrets or personal information. This description is public gate metadata.</p>
+                <label className="mt-5 block">
+                  <span className="field-label">Private content</span>
+                  <textarea
+                    className="field-input mt-2 min-h-36 resize-y"
+                    value={privateContent}
+                    onChange={(event) => setPrivateContent(event.target.value)}
+                    disabled={controlsBusy}
+                    placeholder="Members-only content shown only after successful verification"
+                  />
+                </label>
+                <p className="mt-3 text-xs leading-5 text-faint">Only verified members will see this. Do not put private credentials here.</p>
                 <StatusBanner tone="info" className="mt-5">
                   preprod network - one-time proof - private credential verification for {gateName || DEFAULT_GATE.name}
                 </StatusBanner>
@@ -999,58 +1059,75 @@ export function GateConsole({ mode }: GateConsoleProps) {
         </section>
 
         <section className="paper-card p-6 sm:p-8">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold text-primary">Complete verification</h2>
-              <p className="mt-3 text-sm leading-6 text-muted">Paste the private credential sent to you by the gate administrator.</p>
+          {accessGranted ? (
+            <div className="space-y-6">
+              <StatusBanner tone="success" title="Access granted">
+                Your membership was verified without revealing your private credential.
+              </StatusBanner>
+
+              <div className="rounded-2xl border border-accent/20 bg-accent/10 p-5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent">{current.name} - Private Area</p>
+                <h2 className="mt-3 text-2xl font-semibold text-primary">Welcome to {current.name}</h2>
+                <div className="mt-5 whitespace-pre-wrap text-sm leading-7 text-muted">
+                  {current.privateContent || DEFAULT_GATE.privateContent}
+                </div>
+              </div>
+
+              <div className="space-y-3 text-sm text-muted">
+                <p>Verified with {walletName ?? "your Midnight wallet"} on Preprod.</p>
+                {lastTx && <ProofReference value={lastTx} network={current.network} />}
+              </div>
             </div>
-            <StageBadge label={published ? "Credential ready" : contractChecking ? "Checking gate" : "Wallet required"} tone={published ? "success" : "warning"} />
-          </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-semibold text-primary">Complete verification</h2>
+                  <p className="mt-3 text-sm leading-6 text-muted">Paste the private credential sent to you by the gate administrator.</p>
+                </div>
+                <StageBadge label={published ? "Credential ready" : contractChecking ? "Checking gate" : "Wallet required"} tone={published ? "success" : "warning"} />
+              </div>
 
-          {contractChecking && (
-            <StatusBanner tone="busy" title="Checking gate" className="mt-6">
-              {contractStatusDetail}
-            </StatusBanner>
-          )}
+              {contractChecking && (
+                <StatusBanner tone="busy" title="Checking gate" className="mt-6">
+                  {contractStatusDetail}
+                </StatusBanner>
+              )}
 
-          {!published && !contractChecking && (
-            <StatusBanner tone="warning" title="This gate is not published yet" className="mt-6">
-              The administrator must publish the gate and share the member link before access can be verified.
-            </StatusBanner>
-          )}
+              {!published && !contractChecking && (
+                <StatusBanner tone="warning" title="This gate is not published yet" className="mt-6">
+                  The administrator must publish the gate and share the member link before access can be verified.
+                </StatusBanner>
+              )}
 
-          <div className="mt-6">{walletBlock}</div>
+              <div className="mt-6">{walletBlock}</div>
 
-          <label className="mt-6 block">
-            <span className="field-label">Private access credential</span>
-            <textarea
-              className="field-input mt-2 min-h-28 resize-y font-mono text-xs"
-              value={credential}
-              onChange={(event) => setCredential(event.target.value)}
-              disabled={controlsBusy || !published}
-              placeholder="Paste the private credential from the gate administrator"
-            />
-          </label>
-          <p className="mt-3 text-xs leading-5 text-faint">
-            Your credential stays private. Nexora hashes it locally and uses it during proof generation.
-          </p>
+              <label className="mt-6 block">
+                <span className="field-label">Private access credential</span>
+                <textarea
+                  className="field-input mt-2 min-h-28 resize-y font-mono text-xs"
+                  value={credential}
+                  onChange={(event) => setCredential(event.target.value)}
+                  disabled={controlsBusy || !published}
+                  placeholder="Paste the private credential from the gate administrator"
+                />
+              </label>
+              <p className="mt-3 text-xs leading-5 text-faint">
+                Your credential stays private. Nexora hashes it locally and uses it during proof generation.
+              </p>
 
-          <button
-            type="button"
-            onClick={proveAccess}
-            disabled={controlsBusy || !published || !session || !credential.trim()}
-            className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <ShieldCheck size={16} aria-hidden="true" />
-            Generate private proof
-          </button>
+              <button
+                type="button"
+                onClick={proveAccess}
+                disabled={controlsBusy || !published || !session || !credential.trim()}
+                className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <ShieldCheck size={16} aria-hidden="true" />
+                Generate private proof
+              </button>
 
-          <div className="mt-5 space-y-4">{renderTransactionStatus}</div>
-
-          {stage === "confirmed" && (
-            <StatusBanner tone="success" title="Access granted" className="mt-5">
-              Your membership was verified without revealing your private credential.
-            </StatusBanner>
+              <div className="mt-5 space-y-4">{renderTransactionStatus}</div>
+            </>
           )}
         </section>
       </div>

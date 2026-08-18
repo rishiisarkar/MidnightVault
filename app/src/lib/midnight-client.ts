@@ -45,20 +45,23 @@ export type SessionInfo = {
   unshieldedAddress: string | null;
 };
 
-export type CredentialEnrollmentResult = {
-  txId: string | null;
-  credentialHash: Uint8Array;
-  alreadyEnrolled: boolean;
-};
-
 export type WalletKind = "lace" | "1am";
 
-export type AccessVerificationResult = {
+export type WalletActionResult = {
   success: boolean;
   confirmed: boolean;
   txHash?: string;
   wallet: WalletKind;
+  status?: string;
   rawResult?: unknown;
+};
+
+export type AccessVerificationResult = WalletActionResult;
+
+export type CredentialEnrollmentResult = WalletActionResult & {
+  txId: string | null;
+  credentialHash: Uint8Array;
+  alreadyEnrolled: boolean;
 };
 
 type WalletSubmitResult = {
@@ -66,6 +69,7 @@ type WalletSubmitResult = {
   confirmed: boolean;
   txHash: string | null;
   wallet: WalletKind;
+  status: string;
   rawResult?: unknown;
 };
 
@@ -628,6 +632,7 @@ export class MidnightClient {
         confirmed: false,
         txHash: directHash,
         wallet: this.walletKind(),
+        status: "submitted",
         rawResult: result,
       };
     }
@@ -643,6 +648,7 @@ export class MidnightClient {
       confirmed: historyHash ? false : true,
       txHash: historyHash,
       wallet: this.walletKind(),
+      status: historyHash ? "submitted" : "confirmed",
       rawResult: result,
     };
   }
@@ -1359,6 +1365,7 @@ export class MidnightClient {
       confirmed: submitResult.confirmed,
       txHash: submitResult.txHash ?? undefined,
       wallet: submitResult.wallet,
+      status: submitResult.status,
       rawResult: submitResult.rawResult,
     };
   }
@@ -1446,7 +1453,16 @@ export class MidnightClient {
         throw new Error("CREDENTIAL_NOT_ADMIN");
       }
       if (contractLedger.valid_credentials.findPathForLeaf(credentialHash)) {
-        return { txId: null, credentialHash, alreadyEnrolled: true };
+        return {
+          success: true,
+          confirmed: true,
+          txId: null,
+          txHash: undefined,
+          credentialHash,
+          alreadyEnrolled: true,
+          wallet: this.walletKind(),
+          status: "already_enrolled",
+        };
       }
     } catch (error) {
       const message = getErrorMessage(error);
@@ -1499,7 +1515,6 @@ export class MidnightClient {
     const proofProvider = (providers as unknown as {
       proofProvider: { proveTx: (tx: unknown) => Promise<SerializedTransaction> };
       walletProvider: { balanceTx: (tx: SerializedTransaction) => Promise<SerializedTransaction> };
-      midnightProvider: { submitTx: (tx: SerializedTransaction) => Promise<string | null> };
     });
 
     let provenTx: SerializedTransaction;
@@ -1518,15 +1533,24 @@ export class MidnightClient {
       throw new Error(`CREDENTIAL_BALANCE:${getErrorMessage(error)}`);
     }
 
-    let txId: string | null;
+    let submitResult: WalletSubmitResult;
     try {
       this.transactionSubmitContext = "credential";
-      txId = await proofProvider.midnightProvider.submitTx(balancedTx);
+      submitResult = await this.submitBalancedTransaction(balancedTx, "credential");
     } catch (error) {
       throw new Error(`CREDENTIAL_SUBMIT:${getErrorMessage(error)}`);
     }
-    if (!txId) throw new Error("CREDENTIAL_SUBMITTED_NO_NETWORK_TX_ID");
-    return { txId, credentialHash, alreadyEnrolled: false };
+    return {
+      success: submitResult.submitted,
+      confirmed: submitResult.confirmed,
+      txId: submitResult.txHash,
+      txHash: submitResult.txHash ?? undefined,
+      credentialHash,
+      alreadyEnrolled: false,
+      wallet: submitResult.wallet,
+      status: submitResult.status,
+      rawResult: submitResult.rawResult,
+    };
   }
 
   async waitForCredentialEnrollment(
@@ -1598,7 +1622,6 @@ export class MidnightClient {
     }
     if (message.startsWith("CREDENTIAL_BALANCE:")) return "Your wallet could not prepare the credential enrollment. Check that it is connected to Preprod, then try again.";
     if (message.startsWith("CREDENTIAL_SUBMIT:")) return "The wallet did not submit the credential enrollment. Approve the request in your wallet, then try again.";
-    if (message === "CREDENTIAL_SUBMITTED_NO_NETWORK_TX_ID") return "The wallet submitted the credential enrollment but did not expose a real Midnight transaction hash. Reconnect the administrator wallet and try again.";
     if (message.startsWith("CREDENTIAL_TRANSACTION:")) {
       const detail = message.slice("CREDENTIAL_TRANSACTION:".length);
       if (detail.includes("__wbg_ptr")) {
