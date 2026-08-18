@@ -1435,18 +1435,18 @@ export class MidnightClient {
     if (message.includes("User rejected") || lower.includes("rejected")) return "The wallet request was canceled. Connect the wallet again when you are ready.";
     if (message === "CREDENTIAL_REQUIRED") return "A valid gate credential is required. Ask the gate administrator to issue access before submitting a proof.";
     if (message === "CREDENTIAL_FORMAT") return "Credentials must be exactly 32 bytes. The value stays in this browser and is never displayed after submission.";
-    if (message === "CREDENTIAL_NOT_ENROLLED") return "This credential is not enrolled for the selected gate, or the gate state is not available yet.";
+    if (message === "CREDENTIAL_NOT_ENROLLED") return "We couldn't verify this credential. It may be incorrect, expired, revoked, or already used. Ask the gate administrator for a new credential.";
     if (message === "CREDENTIAL_NOT_ADMIN") return "Only the original administrator wallet that deployed this gate can enroll credentials. Reconnect that same wallet on the gate network and try again.";
-    if (message.startsWith("ACCESS_PREPARE:")) return `The access proof could not be prepared: ${message.slice("ACCESS_PREPARE:".length)}`;
+    if (message.startsWith("ACCESS_PREPARE:")) return "We couldn't verify this credential. It may be incorrect, expired, revoked, or already used. Ask the gate administrator for a new credential.";
     if (message.startsWith("ACCESS_PROVE:")) {
       const detail = message.slice("ACCESS_PROVE:".length);
       if (detail.includes("__wbg_ptr") || lower.includes("wasm")) {
         return "Access proof generation hit a Midnight WASM binding error. Hard-reload, reconnect your wallet on the gate network, and try again.";
       }
-      return `Access proof generation failed: ${detail}`;
+      return "We couldn't verify this credential. It may be incorrect, expired, revoked, or already used. Ask the gate administrator for a new credential.";
     }
-    if (message.startsWith("ACCESS_BALANCE:")) return `The wallet could not balance the access proof transaction: ${message.slice("ACCESS_BALANCE:".length)}`;
-    if (message.startsWith("ACCESS_SUBMIT:")) return `The wallet rejected the access proof submission: ${message.slice("ACCESS_SUBMIT:".length)}`;
+    if (message.startsWith("ACCESS_BALANCE:")) return "Your wallet could not prepare the access request. Check that it is connected to Preprod, then try again.";
+    if (message.startsWith("ACCESS_SUBMIT:")) return "The wallet did not submit the access request. Approve the request in your wallet, then try again.";
     if (message.startsWith("CREDENTIAL_PREPARE:")) return `The credential enrollment transaction could not be prepared: ${message.slice("CREDENTIAL_PREPARE:".length)}`;
     if (message.startsWith("CREDENTIAL_PROVE:")) {
       const detail = message.slice("CREDENTIAL_PROVE:".length);
@@ -1455,8 +1455,8 @@ export class MidnightClient {
       }
       return `Proof generation for credential enrollment failed: ${detail}`;
     }
-    if (message.startsWith("CREDENTIAL_BALANCE:")) return `The wallet could not balance the enrollment transaction (fees/DUST): ${message.slice("CREDENTIAL_BALANCE:".length)}`;
-    if (message.startsWith("CREDENTIAL_SUBMIT:")) return `The wallet rejected the enrollment submission: ${message.slice("CREDENTIAL_SUBMIT:".length)}`;
+    if (message.startsWith("CREDENTIAL_BALANCE:")) return "Your wallet could not prepare the credential enrollment. Check that it is connected to Preprod, then try again.";
+    if (message.startsWith("CREDENTIAL_SUBMIT:")) return "The wallet did not submit the credential enrollment. Approve the request in your wallet, then try again.";
     if (message.startsWith("CREDENTIAL_TRANSACTION:")) {
       const detail = message.slice("CREDENTIAL_TRANSACTION:".length);
       if (detail.includes("__wbg_ptr")) {
@@ -1478,20 +1478,20 @@ export class MidnightClient {
     if (message === "WALLET_DISCONNECTED") return "The wallet did not keep the connection open. Unlock it, keep the extension open, and try again.";
     if (message.startsWith("DEPLOY_ZK_ASSETS:")) return `A deployment proof asset could not be loaded. Verify this URL is reachable, then retry: ${message.slice("DEPLOY_ZK_ASSETS:".length)}`;
     if (message.startsWith("DEPLOY_PROVER:")) return "The wallet could not initialize proof generation. Unlock the wallet, verify the selected Midnight network, and retry.";
-    if (message.startsWith("DEPLOY_PROVIDER:")) return `Deployment setup failed before wallet approval: ${message.slice("DEPLOY_PROVIDER:".length)}`;
+    if (message.startsWith("DEPLOY_PROVIDER:")) return "Publishing could not start. Reconnect your Preprod wallet and try again.";
     if (message.startsWith("DEPLOY_KEY:")) {
       const detail = message.slice("DEPLOY_KEY:".length);
       if (detail.includes("KEY_NETWORK:")) return `The wallet returned a key for a different network. Switch to the gate network, reconnect, and retry. (${detail.slice("KEY_NETWORK:".length)})`;
       if (detail.includes("KEY_FORMAT:")) return `Lace returned an unsupported administrator key representation. ${detail.slice("KEY_FORMAT:".length)}`;
       return `The wallet administrator key could not be used for the selected network. ${detail}`;
     }
-    if (message.startsWith("DEPLOY_BUILD:")) return "The deployment transaction could not be constructed. Verify the wallet is connected to the gate network and retry.";
-    if (message.startsWith("DEPLOY_PROVE:")) return `Proof generation failed: ${message.slice("DEPLOY_PROVE:".length)}`;
-    if (message.startsWith("DEPLOY_BALANCE:")) return `Transaction balancing failed. Check wallet permissions and network resources: ${message.slice("DEPLOY_BALANCE:".length)}`;
+    if (message.startsWith("DEPLOY_BUILD:")) return "The gate publish request could not be prepared. Verify the wallet is connected to Preprod and retry.";
+    if (message.startsWith("DEPLOY_PROVE:")) return "The private publish proof could not be generated. Reconnect your wallet and try again.";
+    if (message.startsWith("DEPLOY_BALANCE:")) return "Your wallet could not prepare the publish request. Check wallet permissions and network resources, then try again.";
     if (message.startsWith("DEPLOY_CONFIRM:")) {
       return `The wallet accepted the deploy request, but the Midnight indexer never found a contract at that address. With 1AM this usually means submit failed or the node dropped the tx (history stays empty). Click "Reset & redeploy from scratch", wait 10-15 minutes, reconnect 1AM on the gate network, and deploy once. (${message.slice("DEPLOY_CONFIRM:".length)})`;
     }
-    if (message.startsWith("DUST_EMPTY:")) return `The wallet reports zero available DUST, although its DUST capacity is ${message.slice("DUST_EMPTY:".length)}. Wait for the wallet to finish syncing/refilling, then reconnect and retry.`;
+    if (message.startsWith("DUST_EMPTY:")) return "The wallet is not ready to pay for the publish request. Wait for it to finish syncing or refill, then reconnect and retry.";
     if (message.startsWith("DEPLOY_SUBMIT:")) {
       const rest = message.slice("DEPLOY_SUBMIT:".length);
       const contractMatch = rest.match(/^contractId=([0-9a-f]+):(.*)/i);
@@ -1499,10 +1499,10 @@ export class MidnightClient {
         const [, addr, detail] = contractMatch;
         const lowerDetail = detail.toLowerCase();
         if (lowerDetail.includes("temporarily banned") || lowerDetail.includes("temp banned")) {
-          return `The network rejected this deploy (transaction temporarily banned). It is not on-chain - 1AM history will stay empty. Wait 10-15 minutes, click "Reset & redeploy from scratch", then Deploy once. Do not spam Deploy. (Derived address was ${addr}.)`;
+          return `The network temporarily rejected this publish request. It is not confirmed on-chain. Wait 10-15 minutes, then publish once again. Do not retry repeatedly. Derived address: ${addr}.`;
         }
         if (lowerDetail.includes("no transaction id") || lowerDetail.includes("history is empty")) {
-          return `1AM signed but did not return a transaction id, so the deploy almost certainly never landed. Wait, Reset & redeploy, then try once. (Derived address: ${addr}.) Detail: ${detail}`;
+          return `1AM signed but did not return a transaction id, so the publish request may not have landed. Wait a few minutes, then restore or publish once. Derived address: ${addr}. Detail: ${detail}`;
         }
         return `The wallet reported an error after you signed. The tx may still have reached the node - use "Check deployment confirmation" once, or paste this address into "Restore published gate": ${addr}. Error detail: ${detail}`;
       }

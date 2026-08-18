@@ -19,7 +19,7 @@ const CONFIGURED_CONTRACT_ID = (process.env.NEXT_PUBLIC_MIDNIGHT_CONTRACT_ADDRES
 export const DEFAULT_GATE: GateRecord = {
   id: "genesis",
   name: "Genesis Vault",
-  description: "A private launch room for approved Midnight members.",
+  description: "A private launch room for approved Nexora members.",
   network: "preprod",
   contractId: CONFIGURED_CONTRACT_ID,
   deploymentTxId: null,

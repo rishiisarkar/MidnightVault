@@ -5,12 +5,12 @@ import { Splash } from "@/components/Splash";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Midnight | Zero-Knowledge Access Gateway",
-  description: "A Midnight Preprod access gateway for private credential proofs.",
+  title: "Nexora | Private Access Gateway",
+  description: "A Midnight Preprod access gateway for private Nexora credential proofs.",
   metadataBase: new URL(process.env.NEXT_PUBLIC_LIVE_DEMO_URL || "http://localhost:3000"),
   openGraph: {
-    title: "Midnight",
-    description: "Private credential membership proofs on Midnight Preprod.",
+    title: "Nexora",
+    description: "Private Nexora membership proofs on Midnight Preprod.",
     type: "website",
   },
 };

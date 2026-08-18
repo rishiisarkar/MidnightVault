@@ -6,18 +6,18 @@ import { StageBadge } from "@/components/ui/StatusBanner";
 const steps = [
   {
     icon: BadgeCheck,
-    title: "Deploy a gate",
-    body: "An administrator publishes the Compact contract to Midnight Preprod and becomes the only wallet that can enroll credentials.",
+    title: "Publish a gate",
+    body: "An administrator sets up the member experience, connects Lace or 1AM, and publishes the gate on Preprod.",
   },
   {
     icon: KeyRound,
-    title: "Enroll a secret",
-    body: "The app hashes a 32-byte credential locally and records only the allowlist leaf on-chain.",
+    title: "Issue access",
+    body: "Nexora generates a private credential locally and enrolls only its hash for the member.",
   },
   {
     icon: ShieldCheck,
-    title: "Prove access",
-    body: "Members prove Merkle membership and spend a nullifier once without revealing the credential.",
+    title: "Verify privately",
+    body: "Members open the gate link, connect a wallet, and prove access without revealing the credential.",
   },
 ];
 
@@ -26,7 +26,7 @@ export default function Home() {
     <PageShell
       eyebrow="Midnight Preprod"
       title="Private access, proven without disclosure."
-      description="Deploy a reusable zero-knowledge credential gate, enroll members, and verify access with one-time nullifier protection."
+      description="Nexora helps teams publish a private gate, issue member credentials, and verify access on Midnight Preprod."
       actions={
         <Link
           href="/admin"
@@ -46,10 +46,10 @@ export default function Home() {
             <StageBadge label="Compact ZK" tone="neutral" />
           </div>
           <h2 className="mt-8 max-w-2xl font-display text-3xl leading-tight text-primary sm:text-4xl">
-            A credential gateway built around the real Midnight contract flow.
+            A private gateway with a clear admin and member path.
           </h2>
           <p className="mt-4 max-w-2xl text-sm leading-7 text-muted sm:text-base">
-            The browser path connects to a Preprod wallet, builds Compact call transactions, generates proofs with the configured proof server, submits through the wallet, and waits for indexer confirmation.
+            Admins configure and publish a gate, then members use a private credential to prove access from their own wallet.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/gate" className="inline-flex min-h-11 items-center justify-center rounded-full border border-primary px-5 text-sm font-semibold text-primary transition-colors hover:bg-secondary">
@@ -82,7 +82,7 @@ export default function Home() {
       <section id="privacy" className="mt-6 paper-card p-6 sm:p-8">
         <p className="eyebrow">Privacy model</p>
         <p className="mt-3 max-w-4xl text-base leading-7 text-muted">
-          Raw credentials stay in the browser. The contract stores the administrator key, credential Merkle tree, and spent nullifiers so membership can be proven while preventing replay.
+          Raw credentials stay in the browser. Nexora submits only the credential hash for enrollment, then uses a private proof when members verify access.
         </p>
       </section>
     </PageShell>

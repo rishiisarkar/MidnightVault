@@ -3,21 +3,33 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Copy, ExternalLink, KeyRound, Rocket, ShieldCheck, WalletCards } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  CircleDot,
+  Copy,
+  ExternalLink,
+  KeyRound,
+  Link2,
+  Rocket,
+  ShieldCheck,
+  WalletCards,
+} from "lucide-react";
 import { useGate } from "@/hooks/useGate";
 import {
   APP_NETWORK_LABEL,
   MidnightClient,
-  uint8ArrayToHex,
   verifyContractIndexed,
   type SessionInfo,
   type TransactionProgressStage,
   type WalletOption,
 } from "@/lib/midnight-client";
 import {
+  DEFAULT_GATE,
   formatContractId,
   gateUrl,
   isValidContractId,
+  normalizeContractId,
   resetGateToDraft,
   restorePublishedGate,
   saveGate,
@@ -33,6 +45,7 @@ import { StatusBanner, StageBadge, type StatusTone } from "@/components/ui/Statu
 import { PageShell } from "@/components/ui/PageShell";
 import { WalletConnectModal } from "@/components/WalletConnectModal";
 import { WalletSessionBar } from "@/components/WalletSessionBar";
+import type { ProgressStage } from "@/lib/transaction-stages";
 
 type GateConsoleProps = {
   mode: "admin" | "gate" | "vault";
@@ -44,23 +57,28 @@ type UiStatus = {
   message: string;
 };
 
+type ContractStatus = "idle" | "checking" | "published" | "unpublished" | "error";
+type ActionContext = "deploy" | "enroll" | "prove";
+
 const titles = {
   admin: {
-    eyebrow: "Operator console",
-    title: "Deploy and manage a Midnight access gate.",
-    description: "Connect a funded Preprod wallet, deploy the real Compact contract, then enroll credential hashes for members.",
+    eyebrow: "Admin console",
+    title: "Publish a private gate.",
+    description: "Configure the member experience, publish the gate, then issue private member credentials from the administrator wallet.",
   },
   gate: {
-    eyebrow: "Gate restore",
-    title: "Load a published Midnight gate.",
-    description: "Paste a Preprod contract address or open a shared gate link to verify the deployment and prepare wallet access.",
+    eyebrow: "Private access gate",
+    title: "Verify without revealing.",
+    description: "Open a published gate, connect a Preprod wallet, and prove access with the private credential you received.",
   },
   vault: {
     eyebrow: "Member vault",
     title: "Generate a private access proof.",
-    description: "Connect a Preprod wallet and submit the credential proof against the deployed Midnight contract.",
+    description: "Paste your private credential and let Nexora verify membership without revealing it.",
   },
 } as const;
+
+const ADMIN_STEPS = ["Configure", "Connect", "Publish", "Issue Access"] as const;
 
 function firstParam(value: string | string[] | null): string | null {
   return Array.isArray(value) ? value[0] ?? null : value;
@@ -88,6 +106,101 @@ function statusFromError(error: unknown): UiStatus {
   };
 }
 
+function randomCredential(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function absolutePath(path: string): string {
+  if (typeof window === "undefined") return path;
+  return new URL(path, window.location.origin).toString();
+}
+
+function fullGateUrl(gate: GateRecord): string {
+  return absolutePath(gateUrl(gate));
+}
+
+function ButtonCopy({ value, children }: { value: string; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={() => navigator.clipboard?.writeText(value)}
+      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border-subtle px-4 text-xs font-semibold text-muted transition-colors hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <Copy size={14} aria-hidden="true" />
+      {children}
+    </button>
+  );
+}
+
+function StepProgress({
+  gateName,
+  configured,
+  connected,
+  published,
+  issued,
+}: {
+  gateName: string;
+  configured: boolean;
+  connected: boolean;
+  published: boolean;
+  issued: boolean;
+}) {
+  const state = [configured, connected, published, issued];
+  const completed = state.filter(Boolean).length;
+  const percent = Math.round((completed / ADMIN_STEPS.length) * 100);
+  const activeIndex = state.findIndex((done) => !done);
+  const currentIndex = activeIndex === -1 ? ADMIN_STEPS.length - 1 : activeIndex;
+
+  return (
+    <section className="paper-card p-5" aria-label="Gate setup progress">
+      <div className="flex items-center justify-between gap-4">
+        <p className="eyebrow break-words">Gate setup - {gateName}</p>
+        <p className="font-mono text-xs font-semibold text-muted">{percent}%</p>
+      </div>
+      <div className="mt-4 h-1 rounded-full bg-secondary" aria-hidden="true">
+        <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${percent}%` }} />
+      </div>
+      <div className="mt-4 grid gap-3 text-sm text-muted sm:grid-cols-4">
+        {ADMIN_STEPS.map((label, index) => {
+          const done = state[index];
+          const current = index === currentIndex && !done;
+          const Icon = done ? CheckCircle2 : current ? CircleDot : Circle;
+          return (
+            <div key={label} className={`flex items-center gap-2 ${done || current ? "text-accent" : "text-faint"}`}>
+              <Icon size={16} aria-hidden="true" />
+              <span className="font-medium">{label}</span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function SectionTitle({
+  icon: Icon,
+  title,
+  body,
+}: {
+  icon: typeof ShieldCheck;
+  title: string;
+  body: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-card text-accent">
+        <Icon size={20} aria-hidden="true" />
+      </span>
+      <div className="min-w-0">
+        <h2 className="text-lg font-semibold text-primary">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">{body}</p>
+      </div>
+    </div>
+  );
+}
+
 export function GateConsole({ mode }: GateConsoleProps) {
   const searchParams = useSearchParams();
   const [client] = useState(() => new MidnightClient());
@@ -101,6 +214,8 @@ export function GateConsole({ mode }: GateConsoleProps) {
   });
 
   const [localGate, setLocalGate] = useState<GateRecord | null>(null);
+  const [gateName, setGateName] = useState(resolvedGate.name);
+  const [gateDescription, setGateDescription] = useState(resolvedGate.description);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [walletName, setWalletName] = useState<string | null>(null);
   const [walletRdns, setWalletRdns] = useState<string | null>(null);
@@ -109,31 +224,111 @@ export function GateConsole({ mode }: GateConsoleProps) {
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [walletConnecting, setWalletConnecting] = useState(false);
   const [credential, setCredential] = useState("");
+  const [credentialIssued, setCredentialIssued] = useState(false);
   const [restoreAddress, setRestoreAddress] = useState("");
-  const [stage, setStage] = useState<TransactionProgressStage | "idle" | "confirming" | "confirmed" | "error">("idle");
+  const [stage, setStage] = useState<ProgressStage>("idle");
+  const [actionContext, setActionContext] = useState<ActionContext>("prove");
   const [busy, setBusy] = useState(false);
   const [lastTx, setLastTx] = useState<string | null>(null);
+  const [contractStatus, setContractStatus] = useState<ContractStatus>("idle");
+  const [contractStatusDetail, setContractStatusDetail] = useState("");
   const [status, setStatus] = useState<UiStatus>({
     tone: "info",
     title: "Ready",
-    message: "Connect a Midnight Preprod wallet to begin.",
+    message: "Start with the next highlighted step.",
   });
 
   const current = localGate ?? resolvedGate;
-  const published = Boolean(current.contractId);
+  const configured = gateName.trim().length > 0 && gateDescription.trim().length > 0;
+  const hasContractAddress = Boolean(current.contractId && isValidContractId(current.contractId));
+  const contractChecking = hasContractAddress && (contractStatus === "idle" || contractStatus === "checking");
+  const published = hasContractAddress && contractStatus === "published";
   const title = titles[mode];
   const contractUrl = current.contractId ? explorerContractUrl(current.contractId, current.network) : null;
   const txUrl = lastTx ? explorerTransactionUrl(lastTx, current.network) : null;
-  const controlsBusy = busy || walletConnecting;
+  const controlsBusy = busy || walletConnecting || contractChecking;
+  const memberLink = published ? fullGateUrl(current) : "";
 
-  useEffect(() => () => {
-    client.dispose();
+  useEffect(() => {
+    setGateName(resolvedGate.name);
+    setGateDescription(resolvedGate.description);
+    setLocalGate(null);
+    setCredentialIssued(false);
+  }, [resolvedGate.id, resolvedGate.name, resolvedGate.description, resolvedGate.contractId]);
+
+  useEffect(() => {
+    setWallets(client.getInjectedWallets());
+    return () => {
+      client.dispose();
+    };
   }, [client]);
+
+  useEffect(() => {
+    const contractId = current.contractId;
+    if (!contractId) {
+      setContractStatus("idle");
+      setContractStatusDetail("");
+      return;
+    }
+    if (!isValidContractId(contractId)) {
+      setContractStatus("unpublished");
+      setContractStatusDetail("The saved gate address is not a valid Preprod contract address.");
+      return;
+    }
+
+    let active = true;
+    setContractStatus("checking");
+    setContractStatusDetail("Checking the saved gate on Midnight Preprod.");
+    verifyContractIndexed(contractId)
+      .then((lookup) => {
+        if (!active) return;
+        if (lookup.found && lookup.resolvedAddress) {
+          const restored = restorePublishedGate({
+            id: current.id,
+            contractId: lookup.resolvedAddress,
+            name: gateName,
+            description: gateDescription,
+            deploymentTxId: current.deploymentTxId,
+          });
+          setLocalGate(restored);
+          setContractStatus("published");
+          setContractStatusDetail("The gate is live on Midnight Preprod.");
+        } else {
+          setContractStatus("unpublished");
+          setContractStatusDetail("The saved address was not found on Midnight Preprod.");
+        }
+      })
+      .catch((error) => {
+        if (!active) return;
+        setContractStatus("error");
+        setContractStatusDetail(error instanceof Error ? error.message : "Could not verify the saved gate.");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [current.contractId]);
+
+  const saveConfiguration = () => {
+    const next: GateRecord = {
+      ...current,
+      name: gateName.trim().slice(0, 80) || DEFAULT_GATE.name,
+      description: gateDescription.trim().slice(0, 500) || DEFAULT_GATE.description,
+      network: "preprod",
+    };
+    saveGate(next);
+    setLocalGate(next);
+    setStatus({
+      tone: "success",
+      title: "Gate configuration saved",
+      message: "Next, connect the wallet that will manage this gate.",
+    });
+  };
 
   const connectWallet = async (wallet?: WalletOption) => {
     if (walletConnecting) return;
     setWalletConnecting(true);
-    setStage("preparing");
+    setStage("idle");
     setWalletModalOpen(false);
     setStatus({
       tone: "info",
@@ -146,14 +341,14 @@ export function GateConsole({ mode }: GateConsoleProps) {
       setWalletName(client.walletName);
       setWalletRdns(client.walletRdns);
       setWalletInjectionKey(client.walletInjectionKey);
-      setStage("confirmed");
+      setStage("idle");
       setStatus({
         tone: "success",
         title: "Wallet connected",
         message: `${client.walletName ?? "Wallet"} is connected to ${APP_NETWORK_LABEL}.`,
       });
     } catch (error) {
-      setStage("error");
+      setStage("idle");
       setStatus(statusFromError(error));
     } finally {
       setWalletConnecting(false);
@@ -162,36 +357,59 @@ export function GateConsole({ mode }: GateConsoleProps) {
 
   const chooseWallet = async () => {
     if (walletConnecting) return;
-    const detected = client.getInjectedWallets();
-    setWallets(detected);
+    setWallets(client.getInjectedWallets());
     setWalletModalOpen(true);
   };
 
-  const deployGate = async () => {
+  const publishGate = async () => {
     setBusy(true);
+    setActionContext("deploy");
     setStage("preparing");
     setLastTx(null);
     try {
+      if (!configured) throw new Error("Save the gate configuration before publishing.");
       if (!client.isConnected) throw new Error("WALLET_NOT_CONNECTED");
+      if (current.contractId && isValidContractId(current.contractId)) {
+        const existing = await verifyContractIndexed(current.contractId);
+        if (existing.found && existing.resolvedAddress) {
+          const restored = restorePublishedGate({
+            id: current.id,
+            contractId: existing.resolvedAddress,
+            name: gateName,
+            description: gateDescription,
+            deploymentTxId: current.deploymentTxId,
+          });
+          setLocalGate(restored);
+          setContractStatus("published");
+          setStatus({
+            tone: "success",
+            title: `${restored.name} published`,
+            message: "Existing Preprod deployment detected and reused.",
+          });
+          return;
+        }
+        throw new Error("Saved gate address was not found on Midnight Preprod. Restore the correct address before publishing again.");
+      }
+
       if (!client.addresses) await client.loadWalletAddresses();
       const deployed = await client.deployContract();
       setStage("confirming");
       await client.waitForContractDeployment(deployed.contractId);
-      const next: GateRecord = {
-        ...current,
+      const next = restorePublishedGate({
+        id: current.id,
         contractId: formatContractId(deployed.contractId),
         deploymentTxId: deployed.txId,
-        network: "preprod",
-        status: "published",
-      };
-      saveGate(next);
+        name: gateName,
+        description: gateDescription,
+      });
       setLocalGate(next);
+      setContractStatus("published");
       setLastTx(deployed.txId);
       setStage("confirmed");
       setStatus({
         tone: "success",
-        title: "Gate published",
-        message: "The Midnight Preprod indexer returned state for the deployed contract.",
+        title: `${next.name} published`,
+        message: "The Midnight indexer confirmed the gate deployment.",
       });
     } catch (error) {
       setStage("error");
@@ -203,25 +421,28 @@ export function GateConsole({ mode }: GateConsoleProps) {
 
   const restoreGate = async () => {
     setBusy(true);
-    setStage("preparing");
+    setStage("idle");
     try {
       if (!isValidContractId(restoreAddress)) throw new Error("Invalid contract address.");
       const lookup = await verifyContractIndexed(restoreAddress);
       if (!lookup.found || !lookup.resolvedAddress) throw new Error(lookup.detail);
       const restored = restorePublishedGate({
         contractId: lookup.resolvedAddress,
-        name: current.name,
-        description: current.description,
+        name: gateName,
+        description: gateDescription,
       });
       setLocalGate(restored);
-      setStage("confirmed");
+      setGateName(restored.name);
+      setGateDescription(restored.description);
+      setContractStatus("published");
+      setStage("idle");
       setStatus({
         tone: "success",
         title: "Gate restored",
-        message: lookup.detail,
+        message: "The Preprod indexer confirmed this published gate.",
       });
     } catch (error) {
-      setStage("error");
+      setStage("idle");
       setStatus(statusFromError(error));
     } finally {
       setBusy(false);
@@ -230,24 +451,26 @@ export function GateConsole({ mode }: GateConsoleProps) {
 
   const enrollCredential = async () => {
     setBusy(true);
+    setActionContext("enroll");
     setStage("preparing");
     setLastTx(null);
     try {
-      if (!current.contractId) throw new Error("GATE_NOT_CONFIGURED");
+      if (!published || !current.contractId) throw new Error("GATE_NOT_CONFIGURED");
       if (!client.isConnected) throw new Error("WALLET_NOT_CONNECTED");
       if (!client.addresses) await client.loadWalletAddresses();
       const secret = parseCredential(credential);
-      const result = await client.addCredential(secret, current.contractId, setStage);
+      const result = await client.addCredential(secret, current.contractId, setStage as (stage: TransactionProgressStage) => void);
       if (result.txId) {
         setLastTx(result.txId);
         setStage("confirming");
         await client.waitForCredentialEnrollment(current.contractId, result.credentialHash);
       }
+      setCredentialIssued(true);
       setStage("confirmed");
       setStatus({
         tone: "success",
         title: result.alreadyEnrolled ? "Credential already enrolled" : "Credential enrolled",
-        message: `Credential hash ${uint8ArrayToHex(result.credentialHash)} is available in the gate Merkle tree.`,
+        message: "This member can now verify access with the private credential.",
       });
     } catch (error) {
       setStage("error");
@@ -259,13 +482,14 @@ export function GateConsole({ mode }: GateConsoleProps) {
 
   const proveAccess = async () => {
     setBusy(true);
+    setActionContext("prove");
     setStage("preparing");
     setLastTx(null);
     try {
-      if (!current.contractId) throw new Error("GATE_NOT_CONFIGURED");
+      if (!published || !current.contractId) throw new Error("GATE_NOT_CONFIGURED");
       if (!client.isConnected) throw new Error("WALLET_NOT_CONNECTED");
       if (!client.addresses) await client.loadWalletAddresses();
-      const txId = await client.verifyCredential(parseCredential(credential), current.contractId, setStage);
+      const txId = await client.verifyCredential(parseCredential(credential), current.contractId, setStage as (stage: TransactionProgressStage) => void);
       setLastTx(txId);
       setStage("confirming");
       await client.waitForTransaction(txId);
@@ -275,11 +499,12 @@ export function GateConsole({ mode }: GateConsoleProps) {
         txId,
         unlockedAt: Date.now(),
       });
+      setCredential("");
       setStage("confirmed");
       setStatus({
         tone: "success",
-        title: "Access confirmed",
-        message: "The proof transaction confirmed and this browser session is unlocked.",
+        title: "Access granted",
+        message: `Your membership was verified for ${current.name} without revealing your private credential.`,
       });
     } catch (error) {
       setStage("error");
@@ -308,185 +533,406 @@ export function GateConsole({ mode }: GateConsoleProps) {
     const next = resetGateToDraft(current);
     setLocalGate(next);
     setLastTx(null);
+    setContractStatus("idle");
     setStatus({
       tone: "warning",
       title: "Draft reset",
-      message: "The local gate record is back in draft mode. No on-chain state was changed.",
+      message: "Local gate data was cleared. Any previously published gate remains on Midnight and can be restored by address.",
     });
   };
 
-  return (
-    <PageShell eyebrow={title.eyebrow} title={title.title} description={title.description} maxWidth="6xl">
-      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="space-y-4">
-          <div className="paper-card p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="eyebrow">Selected gate</p>
-                <h2 className="mt-2 break-words text-2xl font-semibold text-primary">{current.name}</h2>
-                <p className="mt-2 text-sm leading-6 text-muted">{current.description}</p>
+  const walletBlock = session ? (
+    <WalletSessionBar
+      walletName={walletName}
+      address={session.unshieldedAddress}
+      network={session.networkId}
+      busy={controlsBusy}
+      onDisconnect={disconnect}
+      onSwitch={chooseWallet}
+    />
+  ) : (
+    <button
+      type="button"
+      onClick={chooseWallet}
+      disabled={controlsBusy}
+      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <WalletCards size={17} aria-hidden="true" />
+      {walletConnecting ? "Wallet approval pending" : "Connect wallet"}
+    </button>
+  );
+
+  const renderTransactionStatus = stage !== "idle" && (
+    <>
+      <StatusBanner tone={status.tone} title={status.title}>{status.message}</StatusBanner>
+      {(busy || walletConnecting || stage === "error" || stage === "confirmed") && (
+        <ProgressPanel stage={stage} context={actionContext} />
+      )}
+      {lastTx && <ProofReference value={lastTx} network={current.network} />}
+      {txUrl && (
+        <a href={txUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-primary">
+          View latest transaction
+          <ExternalLink size={15} aria-hidden="true" />
+        </a>
+      )}
+    </>
+  );
+
+  if (mode === "admin") {
+    return (
+      <PageShell eyebrow={title.eyebrow} title={title.title} description={title.description} maxWidth="7xl">
+        <div className="space-y-6">
+          <StepProgress
+            gateName={gateName || DEFAULT_GATE.name}
+            configured={configured}
+            connected={Boolean(session)}
+            published={published}
+            issued={credentialIssued}
+          />
+
+          <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+            <section className="space-y-6">
+              <div className="paper-card p-5 sm:p-6">
+                <SectionTitle
+                  icon={ShieldCheck}
+                  title="Gate setup"
+                  body="Members see this information before they connect."
+                />
+                <label className="mt-6 block">
+                  <span className="field-label">Gate name</span>
+                  <input
+                    className="field-input mt-2"
+                    value={gateName}
+                    onChange={(event) => setGateName(event.target.value)}
+                    disabled={controlsBusy}
+                  />
+                </label>
+                <label className="mt-5 block">
+                  <span className="field-label">What will members open?</span>
+                  <textarea
+                    className="field-input mt-2 min-h-28 resize-y"
+                    value={gateDescription}
+                    onChange={(event) => setGateDescription(event.target.value)}
+                    disabled={controlsBusy}
+                  />
+                </label>
+                <p className="mt-3 text-xs leading-5 text-faint">Avoid secrets or personal information. This description is public gate metadata.</p>
+                <StatusBanner tone="info" className="mt-5">
+                  preprod network - one-time proof - private credential verification for {gateName || DEFAULT_GATE.name}
+                </StatusBanner>
+                <button
+                  type="button"
+                  onClick={saveConfiguration}
+                  disabled={controlsBusy || !configured}
+                  className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Save gate configuration
+                </button>
               </div>
-              <StageBadge label={published ? "Published" : "Draft"} tone={published ? "success" : "warning"} />
-            </div>
-            <dl className="mt-5 space-y-3 text-sm">
-              <div>
-                <dt className="font-semibold text-primary">Network</dt>
-                <dd className="mt-1 text-muted">{APP_NETWORK_LABEL}</dd>
-              </div>
-              <div>
-                <dt className="font-semibold text-primary">Contract</dt>
-                <dd className="mt-1 break-all font-mono text-xs text-muted">{shorten(current.contractId, 14)}</dd>
-              </div>
-              {current.deploymentTxId && (
-                <div>
-                  <dt className="font-semibold text-primary">Deployment transaction</dt>
-                  <dd className="mt-1 break-all font-mono text-xs text-muted">{shorten(current.deploymentTxId, 14)}</dd>
+
+              <div className="paper-card p-5 sm:p-6">
+                <SectionTitle
+                  icon={WalletCards}
+                  title="Wallet and publishing"
+                  body="Connect a Midnight Preprod wallet, then publish the saved gate."
+                />
+                <div className="mt-5 flex items-center gap-2 text-sm text-muted">
+                  <span className="h-2.5 w-2.5 rounded-full bg-accent" aria-hidden="true" />
+                  {wallets.length} compatible wallet{wallets.length === 1 ? "" : "s"} detected
                 </div>
-              )}
-            </dl>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {contractUrl && (
-                <a href={contractUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border-subtle px-4 text-xs font-semibold text-muted hover:bg-secondary hover:text-primary">
-                  <ExternalLink size={14} aria-hidden="true" />
-                  Explorer
-                </a>
-              )}
-              {published && (
-                <>
-                  <Link href={gateUrl(current)} className="inline-flex min-h-10 items-center rounded-full border border-border-subtle px-4 text-xs font-semibold text-muted hover:bg-secondary hover:text-primary">
-                    Gate link
+                <div className="mt-4">{walletBlock}</div>
+
+                {contractChecking && (
+                  <StatusBanner tone="busy" title="Checking published gate" className="mt-5">
+                    {contractStatusDetail}
+                  </StatusBanner>
+                )}
+
+                {published && current.contractId && (
+                  <StatusBanner tone="success" title={`${current.name} published`} className="mt-5">
+                    <div className="space-y-3">
+                      <p>The gate is live on Midnight Preprod.</p>
+                      <p className="break-all font-mono text-xs">{shorten(current.contractId, 14)}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <ButtonCopy value={normalizeContractId(current.contractId)}>Copy full address</ButtonCopy>
+                        {contractUrl && (
+                          <a href={contractUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border-subtle px-4 text-xs font-semibold text-muted hover:bg-secondary hover:text-primary">
+                            <ExternalLink size={14} aria-hidden="true" />
+                            View on Explorer
+                          </a>
+                        )}
+                        <ButtonCopy value={memberLink}>Copy member gate link</ButtonCopy>
+                      </div>
+                    </div>
+                  </StatusBanner>
+                )}
+
+                {hasContractAddress && (contractStatus === "unpublished" || contractStatus === "error") && (
+                  <StatusBanner tone="warning" title="Published gate needs attention" className="mt-5">
+                    {contractStatusDetail || "The saved gate could not be confirmed on Midnight Preprod. Restore the correct address before publishing again."}
+                  </StatusBanner>
+                )}
+
+                {!hasContractAddress && !published && !contractChecking && configured && session && (
+                  <div className="mt-5 rounded-2xl border border-border-subtle bg-card p-5">
+                    <SectionTitle
+                      icon={Rocket}
+                      title="Publish gate"
+                      body={`Publish ${gateName || DEFAULT_GATE.name} on Midnight Preprod.`}
+                    />
+                    <button
+                      type="button"
+                      onClick={publishGate}
+                      disabled={controlsBusy}
+                      className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Publish private gate
+                    </button>
+                  </div>
+                )}
+
+                {!session && configured && !published && (
+                  <StatusBanner tone="neutral" title="Wallet required" className="mt-5">
+                    Connect Lace or 1AM Wallet on Preprod to continue.
+                  </StatusBanner>
+                )}
+
+                {renderTransactionStatus}
+              </div>
+
+              <div className="paper-card p-5 sm:p-6">
+                <SectionTitle
+                  icon={Link2}
+                  title="Restore published gate"
+                  body="Paste an existing Preprod gate address to reattach this admin console on a new device or after cleared storage."
+                />
+                <label className="mt-5 block">
+                  <span className="field-label">Contract address</span>
+                  <input
+                    className="field-input mt-2 font-mono text-xs"
+                    value={restoreAddress}
+                    onChange={(event) => setRestoreAddress(event.target.value)}
+                    placeholder="Contract hex from publish or Explorer (0x optional)"
+                    disabled={controlsBusy}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={restoreGate}
+                  disabled={controlsBusy || !restoreAddress.trim()}
+                  className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-primary px-5 text-sm font-semibold text-primary transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Link2 size={16} aria-hidden="true" />
+                  Verify and restore
+                </button>
+                <div className="mt-8 border-t border-border-subtle pt-5">
+                  <button
+                    type="button"
+                    onClick={resetDraft}
+                    disabled={controlsBusy}
+                    className="text-sm font-medium text-muted underline underline-offset-4 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Clear local gate data and start fresh
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-6">
+              <div className="paper-card p-5 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <SectionTitle
+                    icon={KeyRound}
+                    title="Issue a member credential"
+                    body="Generate a private credential for someone who should be allowed to access this gate."
+                  />
+                  <StageBadge label={published ? "Ready to issue" : "Publish first"} tone={published ? "success" : "warning"} />
+                </div>
+                <StatusBanner tone="info" title="Privacy notice" className="mt-5">
+                  Nexora hashes the credential locally before enrollment. Only the hash is submitted for the public allowlist.
+                </StatusBanner>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCredential(randomCredential());
+                    setCredentialIssued(false);
+                    setStatus({
+                      tone: "success",
+                      title: "Credential generated locally",
+                      message: "Enroll its hash, then share the raw value through a private channel.",
+                    });
+                  }}
+                  disabled={controlsBusy || !published}
+                  className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border border-border-subtle px-5 text-sm font-semibold text-muted transition-colors hover:bg-secondary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <KeyRound size={16} aria-hidden="true" />
+                  Generate credential locally
+                </button>
+
+                <label className="mt-5 block">
+                  <span className="field-label">Private credential</span>
+                  <input
+                    className="field-input mt-2 font-mono text-xs"
+                    value={credential}
+                    onChange={(event) => setCredential(event.target.value)}
+                    disabled={controlsBusy || !published}
+                    placeholder="Generate a credential or paste one to enroll"
+                  />
+                </label>
+                <p className="mt-3 text-xs leading-5 text-faint">Keep this secret. It is not saved by Nexora.</p>
+
+                <button
+                  type="button"
+                  onClick={enrollCredential}
+                  disabled={controlsBusy || !published || !credential.trim()}
+                  className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <KeyRound size={16} aria-hidden="true" />
+                  Enroll credential
+                </button>
+
+                {credentialIssued && credential && (
+                  <StatusBanner tone="success" title="Credential enrolled" className="mt-5">
+                    <div className="space-y-3">
+                      <p>This member can now verify access.</p>
+                      <div className="rounded-2xl border border-amber-300/40 bg-amber-100 p-4 text-primary">
+                        <p className="font-semibold uppercase">Share privately</p>
+                        <p className="mt-2 break-all font-mono text-xs">{credential}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <ButtonCopy value={memberLink}>Copy gate link</ButtonCopy>
+                          <ButtonCopy value={credential}>Copy credential</ButtonCopy>
+                          <button
+                            type="button"
+                            onClick={() => setCredential("")}
+                            className="inline-flex min-h-10 items-center rounded-full border border-border-subtle px-4 text-xs font-semibold text-muted hover:bg-secondary hover:text-primary"
+                          >
+                            Clear from this page
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </StatusBanner>
+                )}
+              </div>
+
+              <div className="paper-card p-5 sm:p-6">
+                <h2 className="text-lg font-semibold text-primary">What members need</h2>
+                <ul className="mt-5 space-y-4 text-sm leading-6 text-muted">
+                  <li className="flex gap-3"><CheckCircle2 size={17} className="mt-0.5 shrink-0 text-accent" />A compatible Midnight wallet on preprod.</li>
+                  <li className="flex gap-3"><CheckCircle2 size={17} className="mt-0.5 shrink-0 text-accent" />The private credential you shared with them.</li>
+                  <li className="flex gap-3"><CheckCircle2 size={17} className="mt-0.5 shrink-0 text-accent" />The member gate link, not this admin console.</li>
+                </ul>
+                {published && (
+                  <Link href={gateUrl(current)} className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-primary">
+                    Open member gate
+                    <ExternalLink size={15} aria-hidden="true" />
                   </Link>
-                  <Link href={vaultUrl(current)} className="inline-flex min-h-10 items-center rounded-full border border-border-subtle px-4 text-xs font-semibold text-muted hover:bg-secondary hover:text-primary">
-                    Vault link
-                  </Link>
-                </>
-              )}
-            </div>
+                )}
+              </div>
+            </section>
           </div>
+        </div>
 
-          {session ? (
-            <WalletSessionBar
-              walletName={walletName}
-              address={session.unshieldedAddress}
-              network={session.networkId}
-              busy={controlsBusy}
-              onDisconnect={disconnect}
-              onSwitch={chooseWallet}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={chooseWallet}
-              disabled={controlsBusy}
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <WalletCards size={17} aria-hidden="true" />
-              {walletConnecting ? "Wallet approval pending" : "Connect Preprod wallet"}
-            </button>
-          )}
+        <WalletConnectModal
+          open={walletModalOpen}
+          wallets={wallets}
+          selectedRdns={walletRdns}
+          selectedInjectionKey={walletInjectionKey}
+          disabled={walletConnecting}
+          onClose={() => {
+            if (!walletConnecting) setWalletModalOpen(false);
+          }}
+          onSelect={connectWallet}
+        />
+      </PageShell>
+    );
+  }
 
-          <StatusBanner tone={status.tone} title={status.title}>{status.message}</StatusBanner>
-          <ProgressPanel stage={stage} context={mode === "admin" ? "deploy" : "prove"} />
-          {lastTx && <ProofReference value={lastTx} network={current.network} />}
-          {txUrl && (
-            <a href={txUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:text-primary">
-              View latest transaction
-              <ExternalLink size={15} aria-hidden="true" />
-            </a>
-          )}
+  return (
+    <PageShell eyebrow={title.eyebrow} title={current.name} description={current.description} maxWidth="6xl">
+      <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
+        <section className="paper-card p-6 sm:p-8">
+          <span className="flex h-20 w-20 items-center justify-center rounded-full border border-border-subtle bg-card text-accent" aria-hidden="true">
+            <ShieldCheck size={34} />
+          </span>
+          <h2 className="mt-8 text-2xl font-semibold text-primary">Verify without revealing</h2>
+          <p className="mt-4 text-sm leading-7 text-muted">
+            Nexora proves that your private credential belongs to this gate without revealing the credential.
+          </p>
+          <div className="mt-8 border-t border-border-subtle pt-6">
+            <dl className="space-y-4 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted">Network</dt>
+                <dd className="font-mono text-accent">preprod</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted">Contract</dt>
+                <dd className={published ? "text-accent" : "text-amber-500"}>
+                  {contractChecking ? "Checking" : published ? "Published" : "Not published"}
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted">Gate</dt>
+                <dd className="max-w-[12rem] truncate font-medium text-primary">{current.name}</dd>
+              </div>
+            </dl>
+          </div>
         </section>
 
-        <section className="space-y-4">
-          {mode === "admin" && (
-            <div className="paper-card p-5">
-              <div className="flex items-start gap-3">
-                <Rocket size={20} className="mt-1 text-accent" aria-hidden="true" />
-                <div>
-                  <h2 className="text-lg font-semibold text-primary">Contract deployment</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted">
-                    Deployment uses the existing Compact contract, local ZK assets, wallet balancing, and Preprod indexer confirmation.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={deployGate}
-                  disabled={controlsBusy}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Deploy contract
-                </button>
-                <button
-                  type="button"
-                  onClick={resetDraft}
-                  disabled={controlsBusy}
-                  className="inline-flex min-h-11 items-center justify-center rounded-full border border-border-subtle px-5 text-sm font-semibold text-muted transition-colors hover:bg-secondary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Reset local draft
-                </button>
-              </div>
+        <section className="paper-card p-6 sm:p-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold text-primary">Complete verification</h2>
+              <p className="mt-3 text-sm leading-6 text-muted">Paste the private credential sent to you by the gate administrator.</p>
             </div>
-          )}
-
-          <div className="paper-card p-5">
-            <div className="flex items-start gap-3">
-              <Copy size={20} className="mt-1 text-accent" aria-hidden="true" />
-              <div>
-                <h2 className="text-lg font-semibold text-primary">Restore published gate</h2>
-                <p className="mt-2 text-sm leading-6 text-muted">Verify a known Preprod contract address through the indexer and save it locally.</p>
-              </div>
-            </div>
-            <label className="mt-5 block">
-              <span className="field-label">Contract address</span>
-              <input
-                className="field-input mt-2 font-mono text-xs"
-                value={restoreAddress}
-                onChange={(event) => setRestoreAddress(event.target.value)}
-                placeholder="8dde1979..."
-                disabled={controlsBusy}
-              />
-            </label>
-            <button
-              type="button"
-              onClick={restoreGate}
-              disabled={controlsBusy || !restoreAddress.trim()}
-              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-primary px-5 text-sm font-semibold text-primary transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Verify and restore
-            </button>
+            <StageBadge label={published ? "Credential ready" : contractChecking ? "Checking gate" : "Wallet required"} tone={published ? "success" : "warning"} />
           </div>
 
-          {(mode === "admin" || mode === "vault") && (
-            <div className="paper-card p-5">
-              <div className="flex items-start gap-3">
-                {mode === "admin" ? <KeyRound size={20} className="mt-1 text-accent" aria-hidden="true" /> : <ShieldCheck size={20} className="mt-1 text-accent" aria-hidden="true" />}
-                <div>
-                  <h2 className="text-lg font-semibold text-primary">{mode === "admin" ? "Enroll credential" : "Submit access proof"}</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted">
-                    Enter a 64-character hex credential or a short text secret. It is normalized to 32 bytes in this browser.
-                  </p>
-                </div>
-              </div>
-              <label className="mt-5 block">
-                <span className="field-label">Credential secret</span>
-                <textarea
-                  className="field-input mt-2 min-h-28 resize-y font-mono text-xs"
-                  value={credential}
-                  onChange={(event) => setCredential(event.target.value)}
-                  disabled={controlsBusy}
-                  placeholder="64 hex chars or short text"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={mode === "admin" ? enrollCredential : proveAccess}
-                disabled={controlsBusy || !published || !credential.trim()}
-                className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {mode === "admin" ? "Enroll credential" : "Generate proof"}
-              </button>
-            </div>
+          {contractChecking && (
+            <StatusBanner tone="busy" title="Checking gate" className="mt-6">
+              {contractStatusDetail}
+            </StatusBanner>
+          )}
+
+          {!published && !contractChecking && (
+            <StatusBanner tone="warning" title="This gate is not published yet" className="mt-6">
+              The administrator must publish the gate and share the member link before access can be verified.
+            </StatusBanner>
+          )}
+
+          <div className="mt-6">{walletBlock}</div>
+
+          <label className="mt-6 block">
+            <span className="field-label">Private access credential</span>
+            <textarea
+              className="field-input mt-2 min-h-28 resize-y font-mono text-xs"
+              value={credential}
+              onChange={(event) => setCredential(event.target.value)}
+              disabled={controlsBusy || !published}
+              placeholder="Paste the private credential from the gate administrator"
+            />
+          </label>
+          <p className="mt-3 text-xs leading-5 text-faint">
+            Your credential stays private. Nexora hashes it locally and uses it during proof generation.
+          </p>
+
+          <button
+            type="button"
+            onClick={proveAccess}
+            disabled={controlsBusy || !published || !session || !credential.trim()}
+            className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ShieldCheck size={16} aria-hidden="true" />
+            Generate private proof
+          </button>
+
+          <div className="mt-5 space-y-4">{renderTransactionStatus}</div>
+
+          {stage === "confirmed" && (
+            <StatusBanner tone="success" title="Access granted" className="mt-5">
+              Your membership was verified without revealing your private credential.
+            </StatusBanner>
           )}
         </section>
       </div>

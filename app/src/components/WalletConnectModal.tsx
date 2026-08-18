@@ -15,7 +15,7 @@ type WalletConnectModalProps = {
 };
 
 function walletKey(wallet: WalletOption): string {
-  return `${wallet.rdns}:${wallet.apiVersion}`;
+  return `${wallet.injectionKey}:${wallet.rdns}:${wallet.apiVersion}`;
 }
 
 function initials(name: string): string {
