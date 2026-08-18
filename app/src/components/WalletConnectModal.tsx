@@ -57,7 +57,7 @@ export function WalletConnectModal({ open, wallets, selectedRdns, onClose, onSel
               Choose a wallet
             </h2>
             <p id="wallet-modal-description" className="mt-2 text-sm leading-6 text-muted">
-              Select the wallet you want to use for this Midnight session. Privora will request permission only from that wallet.
+              Select the wallet you want to use for this Midnight session. Midnight will request permission only from that wallet.
             </p>
           </div>
           <button
@@ -103,7 +103,7 @@ export function WalletConnectModal({ open, wallets, selectedRdns, onClose, onSel
           )}
         </div>
         <div className="border-t border-border-subtle px-6 py-4 text-xs leading-5 text-muted">
-          Your wallet stays in the extension. Privora never receives your seed phrase or private keys.
+          Your wallet stays in the extension. Midnight never receives your seed phrase or private keys.
         </div>
       </section>
     </div>

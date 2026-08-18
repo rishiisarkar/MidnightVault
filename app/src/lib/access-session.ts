@@ -1,6 +1,6 @@
 /** Browser-only session markers after a successful gate proof. */
 
-const ACCESS_PREFIX = "privora_access:";
+const ACCESS_PREFIX = "midnight_access:";
 
 export type AccessSession = {
   gateId: string;

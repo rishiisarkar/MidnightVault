@@ -53,10 +53,10 @@ export const APP_NETWORK_LABEL = "Midnight Preprod";
 
 export const PREPROD_CONFIG: SessionInfo = {
   networkId: "preprod",
-  indexerUrl: "https://indexer.preprod.midnight.network/api/v4/graphql",
-  indexerWsUrl: "wss://indexer.preprod.midnight.network/api/v4/graphql/ws",
-  proofServerUrl: "https://proof-server.preprod.midnight.network",
-  nodeUrl: "https://rpc.preprod.midnight.network",
+  indexerUrl: process.env.NEXT_PUBLIC_MIDNIGHT_INDEXER_HTTP_URL ?? "https://indexer.preprod.midnight.network/api/v4/graphql",
+  indexerWsUrl: process.env.NEXT_PUBLIC_MIDNIGHT_INDEXER_WS_URL ?? "wss://indexer.preprod.midnight.network/api/v4/graphql/ws",
+  proofServerUrl: process.env.NEXT_PUBLIC_MIDNIGHT_PROOF_SERVER_URL ?? "http://localhost:6300",
+  nodeUrl: process.env.NEXT_PUBLIC_MIDNIGHT_NODE_URL ?? "https://rpc.preprod.midnight.network",
   unshieldedAddress: null,
 };
 
@@ -216,7 +216,7 @@ function walletKeyToString(value: unknown): string {
   throw new Error("Wallet returned an unsupported key format.");
 }
 
-const SIGNING_KEY_STORAGE = "privora_signing_keys";
+const SIGNING_KEY_STORAGE = "midnight_signing_keys";
 
 function persistSigningKey(contractAddress: string, signingKey: unknown): void {
   if (typeof window === "undefined" || signingKey == null) return;
@@ -373,7 +373,7 @@ function createPrivateStateProvider() {
   };
 }
 
-export class PrivoraClient {
+export class MidnightClient {
   public api: WalletApi | null = null;
   public addresses: WalletAddresses | null = null;
   public session: SessionInfo | null = null;
@@ -483,8 +483,17 @@ export class PrivoraClient {
     return session;
   }
 
+  async loadWalletAddresses(): Promise<WalletAddresses> {
+    if (!this.api) throw new Error("WALLET_NOT_CONNECTED");
+    if (!this.addresses) {
+      if (!this.api.getShieldedAddresses) throw new Error("Wallet did not expose shielded transaction keys.");
+      this.addresses = await this.api.getShieldedAddresses();
+    }
+    return this.addresses;
+  }
+
   /**
-   * Clear the local Privora wallet session.
+   * Clear the local Midnight wallet session.
    * If the extension exposes disconnect(), call it so the dApp is no longer authorized.
    */
   async disconnect(): Promise<void> {
@@ -537,7 +546,7 @@ export class PrivoraClient {
       ]);
 
     setNetworkId(this.session.networkId);
-    const assetBaseUrl = new URL("/contract/Privora/", window.location.origin).toString();
+    const assetBaseUrl = new URL("/contract/Midnight/", window.location.origin).toString();
     const zkConfigProvider = new FetchZkConfigProvider(assetBaseUrl, window.fetch.bind(window));
     for (const circuitId of ["add_valid_credential", "verify_access"] as const) {
       try {
@@ -689,7 +698,7 @@ export class PrivoraClient {
         // and confirmed on-chain. Return a pseudo-id so the caller can proceed to indexer-based
         // confirmation polling (which uses contractAddress, not txId).
         if (this.isOneAmWallet()) {
-          console.warn("[Privora] 1AM returned no transaction id from submitTransaction - will fall through to indexer confirmation.");
+          console.warn("[Midnight] 1AM returned no transaction id from submitTransaction - will fall through to indexer confirmation.");
           return uint8ArrayToHex(serialized).slice(0, 64);
         }
         // Last resort for Lace: watchable pseudo-id from the sealed bytes.
@@ -760,7 +769,7 @@ export class PrivoraClient {
     }
     const [{ Contract }, { CompiledContract }, { createUnprovenDeployTx }, { sampleSigningKey }] =
       await Promise.all([
-        import("../../public/contract/Privora/contract/index.js"),
+        import("../../public/contract/Midnight/contract/index.js"),
         import("@midnight-ntwrk/compact-js"),
         import("@midnight-ntwrk/midnight-js-contracts"),
         import("@midnight-ntwrk/compact-runtime"),
@@ -770,8 +779,8 @@ export class PrivoraClient {
       get_merkle_path: (_context: unknown, leaf: Uint8Array) => [null, { leaf, path: [] }] as [null, { leaf: Uint8Array; path: never[] }],
       get_caller: () => [null, new Uint8Array(32)] as [null, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Privora", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
+    const compiledContract = CompiledContract.make("Midnight", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
     const publicKey = this.addresses?.shieldedCoinPublicKey ?? this.addresses?.coinPublicKey;
     if (!publicKey || !this.session) throw new Error("Wallet did not return an administrator key.");
     let adminKey: Uint8Array;
@@ -872,7 +881,7 @@ export class PrivoraClient {
     // and does not require a txId.
     if (!txId && this.isOneAmWallet()) {
       console.warn(
-        `[Privora] 1AM returned no transaction id for deploy (contractId=${contractId}). ` +
+        `[Midnight] 1AM returned no transaction id for deploy (contractId=${contractId}). ` +
         `Proceeding to indexer confirmation - the tx may have been broadcast successfully.`,
       );
     }
@@ -1006,7 +1015,7 @@ export class PrivoraClient {
     const chainAddress = toChainContractAddress(contractId);
 
     const [{ Contract }, { CompiledContract }, { createUnprovenCallTx }] = await Promise.all([
-      import("../../public/contract/Privora/contract/index.js"),
+      import("../../public/contract/Midnight/contract/index.js"),
       import("@midnight-ntwrk/compact-js"),
       import("@midnight-ntwrk/midnight-js-contracts"),
     ]);
@@ -1036,8 +1045,8 @@ export class PrivoraClient {
       },
       get_caller: (context: { privateState: unknown }) => [context.privateState, callerBytes] as [unknown, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Privora", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
+    const compiledContract = CompiledContract.make("Midnight", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
 
     const sdkContractAddress = toChainContractAddress(chainAddress);
     providers.privateStateProvider.setContractAddress(sdkContractAddress);
@@ -1094,7 +1103,7 @@ export class PrivoraClient {
   } | null> {
     if (!this.session) throw new Error("WALLET_NOT_CONNECTED");
     const [{ ledger }, { ContractState }] = await Promise.all([
-      import("../../public/contract/Privora/contract/index.js"),
+      import("../../public/contract/Midnight/contract/index.js"),
       import("@midnight-ntwrk/compact-runtime"),
     ]);
     const query =
@@ -1139,7 +1148,7 @@ export class PrivoraClient {
     const chainAddress = toChainContractAddress(contractId);
 
     const [{ Contract }, { CompiledContract }, { createUnprovenCallTx }] = await Promise.all([
-      import("../../public/contract/Privora/contract/index.js"),
+      import("../../public/contract/Midnight/contract/index.js"),
       import("@midnight-ntwrk/compact-js"),
       import("@midnight-ntwrk/midnight-js-contracts"),
     ]);
@@ -1189,8 +1198,8 @@ export class PrivoraClient {
       },
       get_caller: (context: { privateState: unknown }) => [context.privateState, callerBytes] as [unknown, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Privora", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
+    const compiledContract = CompiledContract.make("Midnight", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
 
     // Final assert: never pass 0x into createUnprovenCallTx (SDK TypeError).
     const sdkContractAddress = toChainContractAddress(chainAddress);
@@ -1327,7 +1336,7 @@ export class PrivoraClient {
       return `The credential enrollment transaction failed: ${detail}`;
     }
     if (message.startsWith("CREDENTIAL_HASH:")) return "The private credential could not be converted into its on-chain allowlist hash. Generate a new credential and retry.";
-    if (message.startsWith("CREDENTIAL_CHECK:")) return `Privora could not check whether this credential is already enrolled: ${message.slice("CREDENTIAL_CHECK:".length)}`;
+    if (message.startsWith("CREDENTIAL_CHECK:")) return `Midnight could not check whether this credential is already enrolled: ${message.slice("CREDENTIAL_CHECK:".length)}`;
     if (message.startsWith("CREDENTIAL_CONFIRM_FAILED:")) return `The credential enrollment transaction was rejected on-chain: ${message.slice("CREDENTIAL_CONFIRM_FAILED:".length)}`;
     if (message.startsWith("CREDENTIAL_CONFIRM:")) return `The credential enrollment is still pending. Do not submit it again until the Midnight indexer confirms the first transaction. (${message.slice("CREDENTIAL_CONFIRM:".length)})`;
     if (message === "CREDENTIAL_SUBMITTED_NO_ID") return "The credential enrollment request completed without a transaction reference. Check the gate state before retrying to avoid enrolling twice.";

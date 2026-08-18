@@ -10,16 +10,20 @@ export type GateRecord = {
   contractVersion: "credential-hash-v2";
 };
 
-const STORAGE_KEY = "privora_gates";
+const STORAGE_KEY = "midnight_gates";
+const CONFIGURED_CONTRACT_ID = (process.env.NEXT_PUBLIC_MIDNIGHT_CONTRACT_ADDRESS ?? "")
+  .trim()
+  .replace(/^0x/i, "")
+  .toLowerCase() || null;
 
 export const DEFAULT_GATE: GateRecord = {
   id: "genesis",
   name: "Genesis Vault",
-  description: "A private launch room for approved Privora members.",
+  description: "A private launch room for approved Midnight members.",
   network: "preprod",
-  contractId: null,
+  contractId: CONFIGURED_CONTRACT_ID,
   deploymentTxId: null,
-  status: "draft",
+  status: CONFIGURED_CONTRACT_ID ? "published" : "draft",
   oneTimeProof: true,
   contractVersion: "credential-hash-v2",
 };
