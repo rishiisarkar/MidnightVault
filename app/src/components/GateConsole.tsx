@@ -20,6 +20,7 @@ import {
   APP_NETWORK_LABEL,
   MidnightClient,
   verifyContractIndexed,
+  type AccessVerificationResult,
   type SessionInfo,
   type TransactionProgressStage,
   type WalletOption,
@@ -529,16 +530,23 @@ export function GateConsole({ mode }: GateConsoleProps) {
       const secret = parseCredential(credential);
       const result = await client.addCredential(secret, current.contractId, setStage as (stage: TransactionProgressStage) => void);
       if (result.txId) {
-        setLastTx(result.txId);
         setStage("confirming");
+        setStatus({
+          tone: "busy",
+          title: "Confirming enrollment",
+          message: "Waiting for the Preprod indexer to confirm the credential enrollment.",
+        });
         await client.waitForCredentialEnrollment(current.contractId, result.credentialHash);
+        setLastTx(result.txId);
       }
       setCredentialIssued(true);
       setStage("confirmed");
       setStatus({
         tone: "success",
         title: result.alreadyEnrolled ? "Credential already enrolled" : "Credential enrolled",
-        message: "This member can now verify access with the private credential.",
+        message: result.alreadyEnrolled
+          ? "The Preprod indexer already has this credential in the gate allowlist."
+          : "The Preprod indexer confirmed this credential enrollment.",
       });
     } catch (error) {
       setStage("error");
@@ -557,14 +565,22 @@ export function GateConsole({ mode }: GateConsoleProps) {
       if (!published || !current.contractId) throw new Error("GATE_NOT_CONFIGURED");
       if (!client.isConnected) throw new Error("WALLET_NOT_CONNECTED");
       if (!client.addresses) await client.loadWalletAddresses();
-      const txId = await client.verifyCredential(parseCredential(credential), current.contractId, setStage as (stage: TransactionProgressStage) => void);
-      setLastTx(txId);
-      setStage("confirming");
-      await client.waitForTransaction(txId);
+      const result: AccessVerificationResult = await client.verifyCredential(parseCredential(credential), current.contractId, setStage as (stage: TransactionProgressStage) => void);
+      if (!result.success) throw new Error("ACCESS_SUBMIT:Wallet did not submit the access request.");
+      if (result.txHash) {
+        setStage("confirming");
+        setStatus({
+          tone: "busy",
+          title: "Confirming access proof",
+          message: "Waiting for the Preprod indexer to confirm this transaction.",
+        });
+        await client.waitForTransaction(result.txHash);
+        setLastTx(result.txHash);
+      }
       markGateUnlocked({
         gateId: current.id,
         contractId: current.contractId,
-        txId,
+        txId: result.txHash ?? null,
         unlockedAt: Date.now(),
       });
       setCredential("");
@@ -572,7 +588,9 @@ export function GateConsole({ mode }: GateConsoleProps) {
       setStatus({
         tone: "success",
         title: "Access granted",
-        message: `Your membership was verified for ${current.name} without revealing your private credential.`,
+        message: result.txHash
+          ? `Your membership was verified for ${current.name} without revealing your private credential.`
+          : `Your membership was verified for ${current.name} without revealing your private credential. Verification confirmed by ${result.wallet === "1am" ? "1AM Wallet" : "the wallet"}.`,
       });
     } catch (error) {
       setStage("error");

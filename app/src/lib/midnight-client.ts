@@ -20,6 +20,7 @@ type WalletApi = {
   getProvingProvider?: (provider: unknown) => Promise<unknown>;
   balanceUnsealedTransaction?: (tx: string, options?: { payFees?: boolean }) => Promise<{ tx?: string }>;
   submitTransaction?: (tx: string) => Promise<unknown>;
+  getTxHistory?: (pageNumber: number, pageSize: number) => Promise<Array<{ txHash?: string; txStatus?: unknown }>>;
   getConnectionStatus?: () => Promise<{ status: string }>;
   hintUsage?: (methodNames: string[]) => Promise<void>;
   getDustBalance?: () => Promise<{ balance: bigint | number | string; cap: bigint | number | string }>;
@@ -48,6 +49,24 @@ export type CredentialEnrollmentResult = {
   txId: string | null;
   credentialHash: Uint8Array;
   alreadyEnrolled: boolean;
+};
+
+export type WalletKind = "lace" | "1am";
+
+export type AccessVerificationResult = {
+  success: boolean;
+  confirmed: boolean;
+  txHash?: string;
+  wallet: WalletKind;
+  rawResult?: unknown;
+};
+
+type WalletSubmitResult = {
+  submitted: boolean;
+  confirmed: boolean;
+  txHash: string | null;
+  wallet: WalletKind;
+  rawResult?: unknown;
 };
 
 export const APP_NETWORK: Exclude<NetworkId, "undeployed"> = "preprod";
@@ -278,6 +297,59 @@ function toBigInt(value: bigint | number | string): bigint {
   return typeof value === "bigint" ? value : BigInt(value);
 }
 
+function normalizeTxHash(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().replace(/^0x/i, "").toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(normalized)) return null;
+  const prefixBytes = hexToUint8Array(normalized.slice(0, Math.min(normalized.length, 48)));
+  const asciiPrefix = Array.from(prefixBytes, (byte) => String.fromCharCode(byte)).join("");
+  if (asciiPrefix.startsWith("midnight:transaction")) return null;
+  return normalized;
+}
+
+function extractTxHash(value: unknown): string | null {
+  const direct = normalizeTxHash(value);
+  if (direct) return direct;
+  if (!value || typeof value !== "object") return null;
+
+  const record = value as Record<string, unknown>;
+  for (const key of ["txHash", "transactionHash", "hash", "txId", "transactionId", "id"]) {
+    const hash = normalizeTxHash(record[key]);
+    if (hash) return hash;
+  }
+  for (const key of ["transaction", "result", "data"]) {
+    const nested = extractTxHash(record[key]);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function explicitFailedWalletStatus(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (record.error != null) return getErrorMessage(record.error);
+  for (const key of ["status", "txStatus", "transactionStatus", "result", "state"]) {
+    const raw = record[key];
+    if (typeof raw !== "string") continue;
+    const normalized = raw.toLowerCase();
+    if (["fail", "failed", "failure", "rejected", "error"].includes(normalized)) return raw;
+  }
+  for (const key of ["transaction", "data"]) {
+    const nested = explicitFailedWalletStatus(record[key]);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function logTxDiagnostics(label: string, info: Record<string, unknown>): void {
+  if (process.env.NODE_ENV === "production") return;
+  try {
+    console.info(`[Midnight:${label}]`, info);
+  } catch {
+    // diagnostics only
+  }
+}
+
 async function queryIndexer(
   indexerUrl: string,
   query: string,
@@ -421,6 +493,7 @@ export class MidnightClient {
   public walletInjectionKey: string | null = null;
   public isConnecting = false;
   private transactionProgressListener: ((stage: TransactionProgressStage) => void) | null = null;
+  private transactionSubmitContext: "credential" | "access" = "credential";
 
   getInjectedWallets(): WalletOption[] {
     if (typeof window === "undefined") return [];
@@ -473,6 +546,113 @@ export class MidnightClient {
       new CompactTypeVector(2, new CompactTypeBytes(32)),
       [domain, pureSecret],
     ));
+  }
+
+  private async readWalletTxHashes(pageSize = 20): Promise<Set<string> | null> {
+    if (!this.api?.getTxHistory) return null;
+    const hashes = new Set<string>();
+    let sawHistoryPage = false;
+    for (const pageNumber of [0, 1]) {
+      try {
+        const entries = await this.api.getTxHistory(pageNumber, pageSize);
+        sawHistoryPage = true;
+        for (const entry of entries ?? []) {
+          const hash = extractTxHash(entry);
+          if (hash) hashes.add(hash);
+        }
+      } catch (error) {
+        logTxDiagnostics("history-read-failed", {
+          wallet: this.walletName,
+          pageNumber,
+          message: getErrorMessage(error),
+        });
+      }
+    }
+    return sawHistoryPage ? hashes : null;
+  }
+
+  private async waitForNewWalletTxHash(
+    previousHashes: Set<string> | null,
+    timeoutMs = 45000,
+  ): Promise<string | null> {
+    if (!this.api?.getTxHistory || !previousHashes) return null;
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const currentHashes = await this.readWalletTxHashes();
+      if (!currentHashes) return null;
+      for (const hash of currentHashes) {
+        if (!previousHashes.has(hash)) return hash;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 1500));
+    }
+    return null;
+  }
+
+  private walletKind(): WalletKind {
+    return this.isOneAmWallet() ? "1am" : "lace";
+  }
+
+  private async submitBalancedTransaction(
+    tx: SerializedTransaction,
+    context: "deploy" | "credential" | "access",
+  ): Promise<WalletSubmitResult> {
+    this.transactionProgressListener?.("awaiting_wallet");
+    if (!this.api?.submitTransaction) throw new Error("Wallet cannot submit a transaction.");
+    if (!tx || typeof tx.serialize !== "function") throw new Error("Cannot submit an invalid balanced transaction.");
+
+    let serialized: Uint8Array;
+    try {
+      serialized = tx.serialize();
+    } catch (error) {
+      throw new Error(`Failed to serialize balanced transaction before submit: ${getErrorMessage(error)}`);
+    }
+
+    const beforeSubmit = await this.readWalletTxHashes();
+    const result = await this.api.submitTransaction(uint8ArrayToHex(serialized));
+    this.transactionProgressListener?.("submitted");
+    const failedStatus = explicitFailedWalletStatus(result);
+    if (failedStatus) throw new Error(`Wallet returned failed transaction status: ${failedStatus}`);
+
+    const directHash = extractTxHash(result);
+    logTxDiagnostics("submit-result", {
+      context,
+      wallet: this.walletName,
+      resultType: result === null ? "null" : typeof result,
+      resultKeys: result && typeof result === "object" ? Object.keys(result as Record<string, unknown>) : [],
+      directHash: Boolean(directHash),
+      historyAvailable: Boolean(beforeSubmit),
+    });
+    if (directHash) {
+      return {
+        submitted: true,
+        confirmed: false,
+        txHash: directHash,
+        wallet: this.walletKind(),
+        rawResult: result,
+      };
+    }
+
+    const historyHash = await this.waitForNewWalletTxHash(beforeSubmit);
+    logTxDiagnostics("submit-history", {
+      context,
+      wallet: this.walletName,
+      historyHash: Boolean(historyHash),
+    });
+    return {
+      submitted: true,
+      confirmed: historyHash ? false : true,
+      txHash: historyHash,
+      wallet: this.walletKind(),
+      rawResult: result,
+    };
+  }
+
+  private async submitBalancedTransactionForHash(
+    tx: SerializedTransaction,
+    context: "deploy" | "credential" | "access",
+  ): Promise<string | null> {
+    const result = await this.submitBalancedTransaction(tx, context);
+    return result.txHash;
   }
 
   private async findWallet(selectedWallet?: WalletOption): Promise<WalletOption> {
@@ -767,14 +947,10 @@ export class MidnightClient {
 
     // Keep balanced txs as raw hex wrappers. Re-hydrating via Transaction.deserialize() across
     // separately loaded ledger WASM instances causes "__wbg_ptr" crashes in the browser.
-    const wrapBalancedHex = (txHex: string): SerializedTransaction & { identifiers: () => string[] } => {
+    const wrapBalancedHex = (txHex: string): SerializedTransaction => {
       const bytes = hexToUint8Array(txHex);
       return {
         serialize: () => bytes,
-        identifiers: () => {
-          // Prefer the first 32 bytes of the sealed payload as a stable watch id fallback.
-          return bytes.length >= 32 ? [uint8ArrayToHex(bytes.slice(0, 32))] : [];
-        },
       };
     };
 
@@ -796,40 +972,7 @@ export class MidnightClient {
       },
     };
     const midnightProvider = {
-      submitTx: async (tx: SerializedTransaction) => {
-        progress("awaiting_wallet");
-        if (!this.api?.submitTransaction) throw new Error("Wallet cannot submit a transaction.");
-        if (!tx || typeof tx.serialize !== "function") throw new Error("Cannot submit an invalid balanced transaction.");
-        let serialized: Uint8Array;
-        try {
-          serialized = tx.serialize();
-        } catch (error) {
-          throw new Error(`Failed to serialize balanced transaction before submit: ${getErrorMessage(error)}`);
-        }
-        const result = await this.api.submitTransaction(uint8ArrayToHex(serialized));
-        progress("submitted");
-        if (typeof result === "string" && result) return result;
-        if (typeof result === "object" && result !== null) {
-          const id = (result as { transactionId?: unknown; id?: unknown }).transactionId ?? (result as { id?: unknown }).id;
-          if (typeof id === "string" && id) return id;
-        }
-        const identifiers = (tx as SerializedTransaction & { identifiers?: () => unknown[] }).identifiers;
-        if (typeof identifiers === "function") {
-          const identifier = identifiers()[0];
-          if (identifier !== undefined && identifier !== null && String(identifier).length > 0) {
-            return String(identifier);
-          }
-        }
-        // 1AM resolves submitTransaction with void even when the tx was successfully broadcast
-        // and confirmed on-chain. Return a pseudo-id so the caller can proceed to indexer-based
-        // confirmation polling (which uses contractAddress, not txId).
-        if (this.isOneAmWallet()) {
-          console.warn("[Midnight] 1AM returned no transaction id from submitTransaction - will fall through to indexer confirmation.");
-          return uint8ArrayToHex(serialized).slice(0, 64);
-        }
-        // Last resort for Lace: watchable pseudo-id from the sealed bytes.
-        return uint8ArrayToHex(serialized).slice(0, 64);
-      },
+      submitTx: async (tx: SerializedTransaction) => this.submitBalancedTransactionForHash(tx, this.transactionSubmitContext),
     };
 
     const proofProvider = {
@@ -978,10 +1121,9 @@ export class MidnightClient {
       }
     };
 
-    let submitted: unknown;
+    let txId: string | null;
     try {
-      if (!this.api?.submitTransaction) throw new Error("Wallet cannot submit a transaction.");
-      submitted = await this.api.submitTransaction(balancedHex);
+      txId = await this.submitBalancedTransactionForHash({ serialize: () => hexToUint8Array(balancedHex) }, "deploy");
     } catch (error) {
       // Even if submit throws, Lace sometimes broadcasts first. Persist the signing key so the
       // operator can use "Check deployment confirmation". For "temporarily banned" the tx did
@@ -993,13 +1135,6 @@ export class MidnightClient {
       throw new Error(`DEPLOY_SUBMIT:contractId=${contractId}:${detail}`);
     }
     await persistKey();
-    const txId = typeof submitted === "string" && submitted
-      ? submitted
-      : typeof submitted === "object" && submitted !== null && typeof (submitted as { transactionId?: unknown }).transactionId === "string"
-        ? (submitted as { transactionId: string }).transactionId
-        : typeof submitted === "object" && submitted !== null && typeof (submitted as { id?: unknown }).id === "string"
-          ? (submitted as { id: string }).id
-          : null;
 
     // 1AM resolves submitTransaction with void/undefined even when the transaction was
     // successfully broadcast and confirmed on-chain. Instead of throwing, allow the deploy
@@ -1131,7 +1266,7 @@ export class MidnightClient {
     }
   }
 
-  async verifyCredential(secret: Uint8Array, contractId: string, onProgress?: (stage: TransactionProgressStage) => void): Promise<string> {
+  async verifyCredential(secret: Uint8Array, contractId: string, onProgress?: (stage: TransactionProgressStage) => void): Promise<AccessVerificationResult> {
     onProgress?.("preparing");
     const providers = await this.ensureProviders(onProgress);
     if (!this.addresses) throw new Error("WALLET_SESSION:Wallet did not return shielded addresses.");
@@ -1196,7 +1331,6 @@ export class MidnightClient {
     const pipeline = providers as unknown as {
       proofProvider: { proveTx: (tx: unknown) => Promise<SerializedTransaction> };
       walletProvider: { balanceTx: (tx: SerializedTransaction) => Promise<SerializedTransaction> };
-      midnightProvider: { submitTx: (tx: SerializedTransaction) => Promise<string> };
     };
 
     let provenTx: SerializedTransaction;
@@ -1213,14 +1347,20 @@ export class MidnightClient {
       throw new Error(`ACCESS_BALANCE:${getErrorMessage(error)}`);
     }
 
-    let txId: string;
+    let submitResult: WalletSubmitResult;
     try {
-      txId = await pipeline.midnightProvider.submitTx(balancedTx);
+      this.transactionSubmitContext = "access";
+      submitResult = await this.submitBalancedTransaction(balancedTx, "access");
     } catch (error) {
       throw new Error(`ACCESS_SUBMIT:${getErrorMessage(error)}`);
     }
-    if (!txId) throw new Error("Proof submitted but no transaction ID was returned.");
-    return txId;
+    return {
+      success: submitResult.submitted,
+      confirmed: submitResult.confirmed,
+      txHash: submitResult.txHash ?? undefined,
+      wallet: submitResult.wallet,
+      rawResult: submitResult.rawResult,
+    };
   }
 
   private async readContractLedger(contractId: string): Promise<{
@@ -1359,7 +1499,7 @@ export class MidnightClient {
     const proofProvider = (providers as unknown as {
       proofProvider: { proveTx: (tx: unknown) => Promise<SerializedTransaction> };
       walletProvider: { balanceTx: (tx: SerializedTransaction) => Promise<SerializedTransaction> };
-      midnightProvider: { submitTx: (tx: SerializedTransaction) => Promise<string> };
+      midnightProvider: { submitTx: (tx: SerializedTransaction) => Promise<string | null> };
     });
 
     let provenTx: SerializedTransaction;
@@ -1378,13 +1518,14 @@ export class MidnightClient {
       throw new Error(`CREDENTIAL_BALANCE:${getErrorMessage(error)}`);
     }
 
-    let txId: string;
+    let txId: string | null;
     try {
+      this.transactionSubmitContext = "credential";
       txId = await proofProvider.midnightProvider.submitTx(balancedTx);
     } catch (error) {
       throw new Error(`CREDENTIAL_SUBMIT:${getErrorMessage(error)}`);
     }
-    if (!txId) throw new Error("CREDENTIAL_SUBMITTED_NO_ID");
+    if (!txId) throw new Error("CREDENTIAL_SUBMITTED_NO_NETWORK_TX_ID");
     return { txId, credentialHash, alreadyEnrolled: false };
   }
 
@@ -1457,6 +1598,7 @@ export class MidnightClient {
     }
     if (message.startsWith("CREDENTIAL_BALANCE:")) return "Your wallet could not prepare the credential enrollment. Check that it is connected to Preprod, then try again.";
     if (message.startsWith("CREDENTIAL_SUBMIT:")) return "The wallet did not submit the credential enrollment. Approve the request in your wallet, then try again.";
+    if (message === "CREDENTIAL_SUBMITTED_NO_NETWORK_TX_ID") return "The wallet submitted the credential enrollment but did not expose a real Midnight transaction hash. Reconnect the administrator wallet and try again.";
     if (message.startsWith("CREDENTIAL_TRANSACTION:")) {
       const detail = message.slice("CREDENTIAL_TRANSACTION:".length);
       if (detail.includes("__wbg_ptr")) {
@@ -1468,7 +1610,6 @@ export class MidnightClient {
     if (message.startsWith("CREDENTIAL_CHECK:")) return `Midnight could not check whether this credential is already enrolled: ${message.slice("CREDENTIAL_CHECK:".length)}`;
     if (message.startsWith("CREDENTIAL_CONFIRM_FAILED:")) return `The credential enrollment transaction was rejected on-chain: ${message.slice("CREDENTIAL_CONFIRM_FAILED:".length)}`;
     if (message.startsWith("CREDENTIAL_CONFIRM:")) return `The credential enrollment is still pending. Do not submit it again until the Midnight indexer confirms the first transaction. (${message.slice("CREDENTIAL_CONFIRM:".length)})`;
-    if (message === "CREDENTIAL_SUBMITTED_NO_ID") return "The credential enrollment request completed without a transaction reference. Check the gate state before retrying to avoid enrolling twice.";
     if (lower.includes("__wbg_ptr")) {
       return "A Midnight WASM module failed to bind (often after a hot reload). Hard-reload the page, reconnect the wallet on the gate network, and try again.";
     }
