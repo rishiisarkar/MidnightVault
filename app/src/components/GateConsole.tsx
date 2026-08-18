@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Copy, ExternalLink, KeyRound, Rocket, ShieldCheck, WalletCards } from "lucide-react";
@@ -104,8 +104,10 @@ export function GateConsole({ mode }: GateConsoleProps) {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [walletName, setWalletName] = useState<string | null>(null);
   const [walletRdns, setWalletRdns] = useState<string | null>(null);
+  const [walletInjectionKey, setWalletInjectionKey] = useState<string | null>(null);
   const [wallets, setWallets] = useState<WalletOption[]>([]);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [walletConnecting, setWalletConnecting] = useState(false);
   const [credential, setCredential] = useState("");
   const [restoreAddress, setRestoreAddress] = useState("");
   const [stage, setStage] = useState<TransactionProgressStage | "idle" | "confirming" | "confirmed" | "error">("idle");
@@ -122,16 +124,28 @@ export function GateConsole({ mode }: GateConsoleProps) {
   const title = titles[mode];
   const contractUrl = current.contractId ? explorerContractUrl(current.contractId, current.network) : null;
   const txUrl = lastTx ? explorerTransactionUrl(lastTx, current.network) : null;
+  const controlsBusy = busy || walletConnecting;
+
+  useEffect(() => () => {
+    client.dispose();
+  }, [client]);
 
   const connectWallet = async (wallet?: WalletOption) => {
-    setBusy(true);
+    if (walletConnecting) return;
+    setWalletConnecting(true);
     setStage("preparing");
     setWalletModalOpen(false);
+    setStatus({
+      tone: "info",
+      title: "Wallet approval pending",
+      message: `Approve the connection request in ${wallet?.name ?? "your Midnight wallet"}.`,
+    });
     try {
       const connected = await client.connectWallet("preprod", wallet);
       setSession(connected);
       setWalletName(client.walletName);
       setWalletRdns(client.walletRdns);
+      setWalletInjectionKey(client.walletInjectionKey);
       setStage("confirmed");
       setStatus({
         tone: "success",
@@ -142,17 +156,14 @@ export function GateConsole({ mode }: GateConsoleProps) {
       setStage("error");
       setStatus(statusFromError(error));
     } finally {
-      setBusy(false);
+      setWalletConnecting(false);
     }
   };
 
   const chooseWallet = async () => {
+    if (walletConnecting) return;
     const detected = client.getInjectedWallets();
     setWallets(detected);
-    if (detected.length === 1) {
-      await connectWallet(detected[0]);
-      return;
-    }
     setWalletModalOpen(true);
   };
 
@@ -161,7 +172,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
     setStage("preparing");
     setLastTx(null);
     try {
-      if (!client.isConnected) await client.connectWallet("preprod");
+      if (!client.isConnected) throw new Error("WALLET_NOT_CONNECTED");
       if (!client.addresses) await client.loadWalletAddresses();
       const deployed = await client.deployContract();
       setStage("confirming");
@@ -223,7 +234,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
     setLastTx(null);
     try {
       if (!current.contractId) throw new Error("GATE_NOT_CONFIGURED");
-      if (!client.isConnected) await client.connectWallet("preprod");
+      if (!client.isConnected) throw new Error("WALLET_NOT_CONNECTED");
       if (!client.addresses) await client.loadWalletAddresses();
       const secret = parseCredential(credential);
       const result = await client.addCredential(secret, current.contractId, setStage);
@@ -252,7 +263,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
     setLastTx(null);
     try {
       if (!current.contractId) throw new Error("GATE_NOT_CONFIGURED");
-      if (!client.isConnected) await client.connectWallet("preprod");
+      if (!client.isConnected) throw new Error("WALLET_NOT_CONNECTED");
       if (!client.addresses) await client.loadWalletAddresses();
       const txId = await client.verifyCredential(parseCredential(credential), current.contractId, setStage);
       setLastTx(txId);
@@ -283,6 +294,8 @@ export function GateConsole({ mode }: GateConsoleProps) {
     setSession(null);
     setWalletName(null);
     setWalletRdns(null);
+    setWalletInjectionKey(null);
+    setWalletConnecting(false);
     setStage("idle");
     setStatus({
       tone: "neutral",
@@ -356,7 +369,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
               walletName={walletName}
               address={session.unshieldedAddress}
               network={session.networkId}
-              busy={busy}
+              busy={controlsBusy}
               onDisconnect={disconnect}
               onSwitch={chooseWallet}
             />
@@ -364,11 +377,11 @@ export function GateConsole({ mode }: GateConsoleProps) {
             <button
               type="button"
               onClick={chooseWallet}
-              disabled={busy}
+              disabled={controlsBusy}
               className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
             >
               <WalletCards size={17} aria-hidden="true" />
-              Connect Preprod wallet
+              {walletConnecting ? "Wallet approval pending" : "Connect Preprod wallet"}
             </button>
           )}
 
@@ -399,7 +412,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
                 <button
                   type="button"
                   onClick={deployGate}
-                  disabled={busy}
+                  disabled={controlsBusy}
                   className="inline-flex min-h-11 items-center justify-center rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Deploy contract
@@ -407,7 +420,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
                 <button
                   type="button"
                   onClick={resetDraft}
-                  disabled={busy}
+                  disabled={controlsBusy}
                   className="inline-flex min-h-11 items-center justify-center rounded-full border border-border-subtle px-5 text-sm font-semibold text-muted transition-colors hover:bg-secondary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Reset local draft
@@ -431,13 +444,13 @@ export function GateConsole({ mode }: GateConsoleProps) {
                 value={restoreAddress}
                 onChange={(event) => setRestoreAddress(event.target.value)}
                 placeholder="8dde1979..."
-                disabled={busy}
+                disabled={controlsBusy}
               />
             </label>
             <button
               type="button"
               onClick={restoreGate}
-              disabled={busy || !restoreAddress.trim()}
+              disabled={controlsBusy || !restoreAddress.trim()}
               className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-primary px-5 text-sm font-semibold text-primary transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
             >
               Verify and restore
@@ -461,14 +474,14 @@ export function GateConsole({ mode }: GateConsoleProps) {
                   className="field-input mt-2 min-h-28 resize-y font-mono text-xs"
                   value={credential}
                   onChange={(event) => setCredential(event.target.value)}
-                  disabled={busy}
+                  disabled={controlsBusy}
                   placeholder="64 hex chars or short text"
                 />
               </label>
               <button
                 type="button"
                 onClick={mode === "admin" ? enrollCredential : proveAccess}
-                disabled={busy || !published || !credential.trim()}
+                disabled={controlsBusy || !published || !credential.trim()}
                 className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-dark px-5 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {mode === "admin" ? "Enroll credential" : "Generate proof"}
@@ -482,7 +495,11 @@ export function GateConsole({ mode }: GateConsoleProps) {
         open={walletModalOpen}
         wallets={wallets}
         selectedRdns={walletRdns}
-        onClose={() => setWalletModalOpen(false)}
+        selectedInjectionKey={walletInjectionKey}
+        disabled={walletConnecting}
+        onClose={() => {
+          if (!walletConnecting) setWalletModalOpen(false);
+        }}
         onSelect={connectWallet}
       />
     </PageShell>

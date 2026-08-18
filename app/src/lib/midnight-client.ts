@@ -27,7 +27,9 @@ type WalletApi = {
   enable?: () => Promise<void> | void;
 };
 
-export type WalletOption = Pick<InitialAPI, "connect" | "name" | "rdns" | "apiVersion" | "icon">;
+export type WalletOption = Pick<InitialAPI, "connect" | "name" | "rdns" | "apiVersion" | "icon"> & {
+  injectionKey: string;
+};
 
 type SerializedTransaction = { serialize: () => Uint8Array };
 
@@ -217,6 +219,8 @@ function walletKeyToString(value: unknown): string {
 }
 
 const SIGNING_KEY_STORAGE = "midnight_signing_keys";
+let sharedConnectionPromise: Promise<SessionInfo> | null = null;
+let sharedConnectionKey: string | null = null;
 
 function persistSigningKey(contractAddress: string, signingKey: unknown): void {
   if (typeof window === "undefined" || signingKey == null) return;
@@ -373,6 +377,39 @@ function createPrivateStateProvider() {
   };
 }
 
+function isWalletLike(value: unknown): value is Pick<InitialAPI, "connect" | "name" | "rdns" | "apiVersion" | "icon"> {
+  return typeof value === "object"
+    && value !== null
+    && typeof (value as { connect?: unknown }).connect === "function";
+}
+
+function walletIdentity(wallet: Partial<WalletOption>): string {
+  return `${wallet.injectionKey ?? ""} ${wallet.name ?? ""} ${wallet.rdns ?? ""}`.toLowerCase();
+}
+
+function normalizeWalletName(wallet: WalletOption): WalletOption {
+  if (wallet.injectionKey === "1am" || walletIdentity(wallet).includes("1am")) {
+    return { ...wallet, name: "1AM Wallet" };
+  }
+  if (walletIdentity(wallet).includes("lace") || walletIdentity(wallet).includes("cardano")) {
+    return { ...wallet, name: "Lace" };
+  }
+  return wallet;
+}
+
+function isLaceOption(wallet: Partial<WalletOption>): boolean {
+  const identity = walletIdentity(wallet);
+  return identity.includes("lace") || identity.includes("cardano");
+}
+
+function isOneAmOption(wallet: Partial<WalletOption>): boolean {
+  return wallet.injectionKey === "1am" || walletIdentity(wallet).includes("1am") || walletIdentity(wallet).includes("1 am");
+}
+
+function walletConnectionKey(wallet: WalletOption, network: NetworkId): string {
+  return `${network}:${wallet.injectionKey}:${wallet.rdns}:${wallet.apiVersion}`;
+}
+
 export class MidnightClient {
   public api: WalletApi | null = null;
   public addresses: WalletAddresses | null = null;
@@ -381,19 +418,49 @@ export class MidnightClient {
   public isConnected = false;
   public walletName: string | null = null;
   public walletRdns: string | null = null;
+  public walletInjectionKey: string | null = null;
+  public isConnecting = false;
   private transactionProgressListener: ((stage: TransactionProgressStage) => void) | null = null;
 
   getInjectedWallets(): WalletOption[] {
     if (typeof window === "undefined") return [];
-    return Object.values(window.midnight ?? {}).filter(
-      (value): value is WalletOption => typeof value === "object" && value !== null && typeof (value as { connect?: unknown }).connect === "function",
-    );
+    const injected = window.midnight ?? {};
+    const wallets = Object.entries(injected)
+      .filter((entry): entry is [string, Pick<InitialAPI, "connect" | "name" | "rdns" | "apiVersion" | "icon">] => isWalletLike(entry[1]))
+      .map(([injectionKey, wallet]) => normalizeWalletName({
+        injectionKey,
+        connect: wallet.connect.bind(wallet),
+        name: wallet.name,
+        rdns: wallet.rdns,
+        apiVersion: wallet.apiVersion,
+        icon: wallet.icon,
+      }));
+
+    const oneAm = isWalletLike(injected["1am"])
+      ? normalizeWalletName({
+          injectionKey: "1am",
+          connect: injected["1am"].connect.bind(injected["1am"]),
+          name: injected["1am"].name,
+          rdns: injected["1am"].rdns,
+          apiVersion: injected["1am"].apiVersion,
+          icon: injected["1am"].icon,
+        })
+      : null;
+    const lace = wallets.find(isLaceOption) ?? null;
+    const ordered = [lace, oneAm, ...wallets.filter((wallet) => !isLaceOption(wallet) && !isOneAmOption(wallet))];
+    const seen = new Set<string>();
+    return ordered.filter((wallet): wallet is WalletOption => {
+      if (!wallet) return false;
+      const key = `${wallet.injectionKey}:${wallet.rdns}:${wallet.apiVersion}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return isLaceOption(wallet) || isOneAmOption(wallet);
+    });
   }
 
   async detectWallet(): Promise<boolean> {
     if (typeof window === "undefined") return false;
-    return Object.values((window as Window & { midnight?: Record<string, unknown> }).midnight ?? {})
-      .some((value) => typeof value === "object" && value !== null && "connect" in value);
+    return this.getInjectedWallets().length > 0;
   }
 
   async getCredentialHash(secret: Uint8Array): Promise<Uint8Array> {
@@ -414,7 +481,10 @@ export class MidnightClient {
     const deadline = Date.now() + 6000;
 
     while (Date.now() < deadline) {
-      const wallet = this.getInjectedWallets()[0];
+      const wallets = this.getInjectedWallets();
+      const oneAm = wallets.find(isOneAmOption);
+      const lace = wallets.find(isLaceOption);
+      const wallet = lace ?? oneAm;
       if (wallet) return wallet;
       await new Promise((resolve) => window.setTimeout(resolve, 100));
     }
@@ -422,65 +492,115 @@ export class MidnightClient {
     throw new Error("NO_WALLET");
   }
 
-  async connectWallet(network: NetworkId = APP_NETWORK, selectedWallet?: WalletOption): Promise<SessionInfo> {
-    if (network !== APP_NETWORK) throw new Error(`NETWORK_MISMATCH:${network}`);
-    const wallet = await this.findWallet(selectedWallet);
-    let api: WalletApi;
-    try {
-      api = await wallet.connect(network) as unknown as WalletApi;
-    } catch (error) {
-      throw new Error(`WALLET_CONNECT_FAILED:${getErrorMessage(error)}`);
+  private async currentConnectionStatus(network: NetworkId, selectedWallet?: WalletOption): Promise<SessionInfo | null> {
+    if (!this.api || !this.session || !this.isConnected) return null;
+    if (selectedWallet) {
+      const sameWallet = this.walletInjectionKey === selectedWallet.injectionKey
+        && this.walletRdns === selectedWallet.rdns;
+      if (!sameWallet) return null;
     }
-    if (api.hintUsage) {
+
+    if (this.api.getConnectionStatus) {
       try {
-        await api.hintUsage([
-          "getShieldedAddresses",
-          "getProvingProvider",
-          "balanceUnsealedTransaction",
-          "submitTransaction",
-        ]);
-      } catch (error) {
-        throw new Error(`WALLET_PERMISSION_FAILED:${getErrorMessage(error)}`);
-      }
-    }
-    if (api.getConnectionStatus) {
-      try {
-        const status = await api.getConnectionStatus();
-        if (status.status !== "connected") throw new Error("WALLET_DISCONNECTED");
+        const status = await this.api.getConnectionStatus();
+        if (status.status !== "connected") return null;
         if ("networkId" in status && status.networkId !== network) {
           throw new Error(`NETWORK_MISMATCH:${status.networkId}`);
         }
       } catch (error) {
-        if (error instanceof Error && (error.message === "WALLET_DISCONNECTED" || error.message.startsWith("NETWORK_MISMATCH:"))) throw error;
-        throw new Error(`WALLET_STATUS_FAILED:${getErrorMessage(error)}`);
+        if (error instanceof Error && error.message.startsWith("NETWORK_MISMATCH:")) throw error;
+        return null;
       }
     }
-    if (!api.getConfiguration) throw new Error("WALLET_CONFIG_UNAVAILABLE");
-    const [configuration, address] = await Promise.all([
-      api.getConfiguration(),
-      api.getUnshieldedAddress?.() ?? Promise.resolve({}),
-    ]);
 
-    const config = configuration as Record<string, unknown>;
-    const actualNetwork = getString(config.networkId);
-    if (actualNetwork && actualNetwork !== network) throw new Error(`NETWORK_MISMATCH_CONFIG:${actualNetwork}`);
-    const fallback = networkConfig(network);
-    const session: SessionInfo = {
-      networkId: APP_NETWORK,
-      indexerUrl: getString(config.indexerUri) ?? fallback.indexerUrl,
-      indexerWsUrl: getString(config.indexerWsUri) ?? fallback.indexerWsUrl,
-      proofServerUrl: getString(config.proverServerUri) ?? fallback.proofServerUrl,
-      nodeUrl: getString(config.substrateNodeUri) ?? fallback.nodeUrl,
-      unshieldedAddress: (address as { unshieldedAddress?: string }).unshieldedAddress ?? null,
-    };
+    if (this.session.networkId !== network) throw new Error(`NETWORK_MISMATCH:${this.session.networkId}`);
+    return this.session;
+  }
 
-    this.api = api as unknown as WalletApi;
-    this.walletName = wallet.name;
-    this.walletRdns = wallet.rdns;
-    this.addresses = null;
-    this.session = session;
-    this.isConnected = true;
-    return session;
+  async connectWallet(network: NetworkId = APP_NETWORK, selectedWallet?: WalletOption): Promise<SessionInfo> {
+    if (network !== APP_NETWORK) throw new Error(`NETWORK_MISMATCH:${network}`);
+    const existing = await this.currentConnectionStatus(network, selectedWallet);
+    if (existing) return existing;
+
+    const wallet = await this.findWallet(selectedWallet);
+    const connectionKey = walletConnectionKey(wallet, network);
+    if (sharedConnectionPromise) {
+      if (sharedConnectionKey === connectionKey) return sharedConnectionPromise;
+      throw new Error("WALLET_CONNECT_PENDING");
+    }
+
+    this.isConnecting = true;
+    sharedConnectionKey = connectionKey;
+    sharedConnectionPromise = (async () => {
+      let api: WalletApi;
+      try {
+        api = await wallet.connect(network) as unknown as WalletApi;
+      } catch (error) {
+        const message = getErrorMessage(error);
+        if (message.toLowerCase().includes("already pending")) throw new Error("WALLET_CONNECT_ALREADY_PENDING");
+        throw new Error(`WALLET_CONNECT_FAILED:${message}`);
+      }
+      if (api.hintUsage) {
+        try {
+          const methods: Array<keyof NonNullable<typeof api>> = [];
+          if (api.getShieldedAddresses) methods.push("getShieldedAddresses");
+          if (api.getProvingProvider) methods.push("getProvingProvider");
+          if (api.balanceUnsealedTransaction) methods.push("balanceUnsealedTransaction");
+          if (api.submitTransaction) methods.push("submitTransaction");
+          await api.hintUsage(methods as never);
+        } catch (error) {
+          throw new Error(`WALLET_PERMISSION_FAILED:${getErrorMessage(error)}`);
+        }
+      }
+      if (api.getConnectionStatus) {
+        try {
+          const status = await api.getConnectionStatus();
+          if (status.status !== "connected") throw new Error("WALLET_DISCONNECTED");
+          if ("networkId" in status && status.networkId !== network) {
+            throw new Error(`NETWORK_MISMATCH:${status.networkId}`);
+          }
+        } catch (error) {
+          if (error instanceof Error && (error.message === "WALLET_DISCONNECTED" || error.message.startsWith("NETWORK_MISMATCH:"))) throw error;
+          throw new Error(`WALLET_STATUS_FAILED:${getErrorMessage(error)}`);
+        }
+      }
+      if (!api.getConfiguration) throw new Error("WALLET_CONFIG_UNAVAILABLE");
+      const [configuration, address] = await Promise.all([
+        api.getConfiguration(),
+        api.getUnshieldedAddress?.() ?? Promise.resolve({}),
+      ]);
+
+      const config = configuration as Record<string, unknown>;
+      const actualNetwork = getString(config.networkId);
+      if (actualNetwork && actualNetwork !== network) throw new Error(`NETWORK_MISMATCH_CONFIG:${actualNetwork}`);
+      const fallback = networkConfig(network);
+      const session: SessionInfo = {
+        networkId: APP_NETWORK,
+        indexerUrl: getString(config.indexerUri) ?? fallback.indexerUrl,
+        indexerWsUrl: getString(config.indexerWsUri) ?? fallback.indexerWsUrl,
+        proofServerUrl: getString(config.proverServerUri) ?? fallback.proofServerUrl,
+        nodeUrl: getString(config.substrateNodeUri) ?? fallback.nodeUrl,
+        unshieldedAddress: (address as { unshieldedAddress?: string }).unshieldedAddress ?? null,
+      };
+
+      this.api = api as unknown as WalletApi;
+      this.walletName = wallet.name;
+      this.walletRdns = wallet.rdns;
+      this.walletInjectionKey = wallet.injectionKey;
+      this.addresses = null;
+      this.providers = null;
+      this.session = session;
+      this.isConnected = true;
+      return session;
+    })();
+
+    try {
+      return await sharedConnectionPromise;
+    } finally {
+      this.isConnecting = false;
+      sharedConnectionPromise = null;
+      sharedConnectionKey = null;
+    }
   }
 
   async loadWalletAddresses(): Promise<WalletAddresses> {
@@ -505,6 +625,8 @@ export class MidnightClient {
     this.isConnected = false;
     this.walletName = null;
     this.walletRdns = null;
+    this.walletInjectionKey = null;
+    this.isConnecting = false;
     this.transactionProgressListener = null;
 
     if (api?.disconnect) {
@@ -514,6 +636,10 @@ export class MidnightClient {
         // Extension may not implement disconnect; local session is already cleared.
       }
     }
+  }
+
+  dispose(): void {
+    this.transactionProgressListener = null;
   }
 
   private async ensureProviders(onProgress?: (stage: TransactionProgressStage) => void): Promise<MidnightProviders> {
@@ -1288,6 +1414,9 @@ export class MidnightClient {
     const message = getErrorMessage(error);
     const lower = message.toLowerCase();
     if (message === "NO_WALLET") return "No compatible Midnight wallet was found. Install or enable a wallet extension, then reload this page.";
+    if (message === "WALLET_CONNECT_PENDING" || message === "WALLET_CONNECT_ALREADY_PENDING" || lower.includes("connection request already pending")) {
+      return "Connection request already open in Lace. Approve or reject it there.";
+    }
     if (message === "PREPROD_REQUIRED") return "Wrong network. This dApp only supports Midnight Preprod. Please switch your wallet to Preprod and reconnect.";
     if (message.startsWith("NETWORK_MISMATCH:")) {
       const actual = message.slice("NETWORK_MISMATCH:".length);
