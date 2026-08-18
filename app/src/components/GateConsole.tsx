@@ -121,15 +121,62 @@ function fullGateUrl(gate: GateRecord): string {
   return absolutePath(gateUrl(gate));
 }
 
-function ButtonCopy({ value, children }: { value: string; children: React.ReactNode }) {
+async function copyText(value: string): Promise<void> {
+  if (!value) throw new Error("Nothing to copy.");
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  textarea.remove();
+  if (!copied) throw new Error("Copy command failed.");
+}
+
+function ButtonCopy({
+  value,
+  copyKey,
+  copiedKey,
+  disabled = false,
+  onCopied,
+  onCopyFailed,
+  children,
+}: {
+  value: string;
+  copyKey: string;
+  copiedKey: string | null;
+  disabled?: boolean;
+  onCopied: (copyKey: string) => void;
+  onCopyFailed: () => void;
+  children: React.ReactNode;
+}) {
+  const copied = copiedKey === copyKey;
   return (
     <button
       type="button"
-      onClick={() => navigator.clipboard?.writeText(value)}
+      onClick={async () => {
+        try {
+          await copyText(value);
+          onCopied(copyKey);
+        } catch {
+          onCopyFailed();
+        }
+      }}
+      disabled={disabled || !value}
       className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border-subtle px-4 text-xs font-semibold text-muted transition-colors hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <Copy size={14} aria-hidden="true" />
-      {children}
+      {copied ? "Copied ✓" : children}
     </button>
   );
 }
@@ -232,6 +279,7 @@ export function GateConsole({ mode }: GateConsoleProps) {
   const [lastTx, setLastTx] = useState<string | null>(null);
   const [contractStatus, setContractStatus] = useState<ContractStatus>("idle");
   const [contractStatusDetail, setContractStatusDetail] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [status, setStatus] = useState<UiStatus>({
     tone: "info",
     title: "Ready",
@@ -248,6 +296,26 @@ export function GateConsole({ mode }: GateConsoleProps) {
   const txUrl = lastTx ? explorerTransactionUrl(lastTx, current.network) : null;
   const controlsBusy = busy || walletConnecting || contractChecking;
   const memberLink = published ? fullGateUrl(current) : "";
+
+  const markCopied = (key: string) => {
+    setCopiedKey(key);
+    setStatus({
+      tone: "success",
+      title: "Member gate link copied",
+      message: key.includes("member-link") ? "The member-facing gate link was copied to your clipboard." : "Copied to your clipboard.",
+    });
+    window.setTimeout(() => {
+      setCopiedKey((currentKey) => (currentKey === key ? null : currentKey));
+    }, 1800);
+  };
+
+  const handleCopyFailed = () => {
+    setStatus({
+      tone: "error",
+      title: "Could not copy the link",
+      message: "Could not copy the link. Please try again.",
+    });
+  };
 
   useEffect(() => {
     setGateName(resolvedGate.name);
@@ -654,14 +722,30 @@ export function GateConsole({ mode }: GateConsoleProps) {
                       <p>The gate is live on Midnight Preprod.</p>
                       <p className="break-all font-mono text-xs">{shorten(current.contractId, 14)}</p>
                       <div className="flex flex-wrap gap-2">
-                        <ButtonCopy value={normalizeContractId(current.contractId)}>Copy full address</ButtonCopy>
+                        <ButtonCopy
+                          value={normalizeContractId(current.contractId)}
+                          copyKey="contract-address"
+                          copiedKey={copiedKey}
+                          onCopied={markCopied}
+                          onCopyFailed={handleCopyFailed}
+                        >
+                          Copy full address
+                        </ButtonCopy>
                         {contractUrl && (
                           <a href={contractUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-full border border-border-subtle px-4 text-xs font-semibold text-muted hover:bg-secondary hover:text-primary">
                             <ExternalLink size={14} aria-hidden="true" />
                             View on Explorer
                           </a>
                         )}
-                        <ButtonCopy value={memberLink}>Copy member gate link</ButtonCopy>
+                        <ButtonCopy
+                          value={memberLink}
+                          copyKey="published-member-link"
+                          copiedKey={copiedKey}
+                          onCopied={markCopied}
+                          onCopyFailed={handleCopyFailed}
+                        >
+                          Copy member gate link
+                        </ButtonCopy>
                       </div>
                     </div>
                   </StatusBanner>
@@ -800,8 +884,24 @@ export function GateConsole({ mode }: GateConsoleProps) {
                         <p className="font-semibold uppercase">Share privately</p>
                         <p className="mt-2 break-all font-mono text-xs">{credential}</p>
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <ButtonCopy value={memberLink}>Copy gate link</ButtonCopy>
-                          <ButtonCopy value={credential}>Copy credential</ButtonCopy>
+                          <ButtonCopy
+                            value={memberLink}
+                            copyKey="credential-member-link"
+                            copiedKey={copiedKey}
+                            onCopied={markCopied}
+                            onCopyFailed={handleCopyFailed}
+                          >
+                            Copy gate link
+                          </ButtonCopy>
+                          <ButtonCopy
+                            value={credential}
+                            copyKey="credential-secret"
+                            copiedKey={copiedKey}
+                            onCopied={markCopied}
+                            onCopyFailed={handleCopyFailed}
+                          >
+                            Copy credential
+                          </ButtonCopy>
                           <button
                             type="button"
                             onClick={() => setCredential("")}

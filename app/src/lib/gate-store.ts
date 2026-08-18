@@ -218,6 +218,9 @@ export function gateUrl(gate: GateRecord): string {
   if (gate.name && gate.name !== DEFAULT_GATE.name) {
     params.set("name", gate.name);
   }
+  if (gate.description && gate.description !== DEFAULT_GATE.description) {
+    params.set("description", gate.description);
+  }
   if (gate.network && gate.network !== "preprod") {
     params.set("network", gate.network);
   }
