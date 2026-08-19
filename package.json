@@ -1,10 +1,10 @@
 {
-  "name": "midnight-monorepo",
+  "name": "privora-monorepo",
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "app",
-    "contracts"
+    "contracts",
+    "app"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=app",

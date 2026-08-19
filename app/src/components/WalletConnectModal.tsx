@@ -8,29 +8,19 @@ type WalletConnectModalProps = {
   open: boolean;
   wallets: WalletOption[];
   selectedRdns?: string | null;
-  selectedInjectionKey?: string | null;
-  disabled?: boolean;
   onClose: () => void;
   onSelect: (wallet: WalletOption) => void;
 };
 
 function walletKey(wallet: WalletOption): string {
-  return `${wallet.injectionKey}:${wallet.rdns}:${wallet.apiVersion}`;
+  return `${wallet.rdns}:${wallet.apiVersion}`;
 }
 
 function initials(name: string): string {
   return name.trim().slice(0, 2).toUpperCase() || "W";
 }
 
-export function WalletConnectModal({
-  open,
-  wallets,
-  selectedRdns,
-  selectedInjectionKey,
-  disabled = false,
-  onClose,
-  onSelect,
-}: WalletConnectModalProps) {
+export function WalletConnectModal({ open, wallets, selectedRdns, onClose, onSelect }: WalletConnectModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -59,7 +49,6 @@ export function WalletConnectModal({
         aria-modal="true"
         aria-labelledby="wallet-modal-title"
         aria-describedby="wallet-modal-description"
-        aria-busy={disabled}
       >
         <div className="flex items-start justify-between gap-4 border-b border-border-subtle p-5 sm:p-6">
           <div className="min-w-0">
@@ -68,14 +57,13 @@ export function WalletConnectModal({
               Choose a wallet
             </h2>
             <p id="wallet-modal-description" className="mt-2 text-sm leading-6 text-muted">
-              Select the wallet you want to use for this Midnight session. Midnight will request permission only from that wallet.
+              Select the wallet you want to use for this Midnight session. Privora will request permission only from that wallet.
             </p>
           </div>
           <button
             ref={closeRef}
             type="button"
             onClick={onClose}
-            disabled={disabled}
             className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle text-muted hover:bg-secondary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             aria-label="Close wallet selection"
           >
@@ -85,16 +73,15 @@ export function WalletConnectModal({
 
         <div className="space-y-3 p-5 sm:p-6">
           {wallets.map((wallet) => {
-            const selected = wallet.injectionKey === selectedInjectionKey && wallet.rdns === selectedRdns;
+            const selected = wallet.rdns === selectedRdns;
             return (
               <button
                 key={walletKey(wallet)}
                 type="button"
                 onClick={() => onSelect(wallet)}
-                disabled={disabled}
                 className={`flex min-h-16 w-full items-center gap-4 rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                   selected ? "border-accent-soft bg-accent-dim" : "border-border-subtle bg-card hover:bg-secondary"
-                } disabled:cursor-not-allowed disabled:opacity-50`}
+                }`}
               >
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-secondary font-semibold text-accent" aria-hidden="true">
                   {initials(wallet.name)}
@@ -116,7 +103,7 @@ export function WalletConnectModal({
           )}
         </div>
         <div className="border-t border-border-subtle px-6 py-4 text-xs leading-5 text-muted">
-          Your wallet stays in the extension. Midnight never receives your seed phrase or private keys.
+          Your wallet stays in the extension. Privora never receives your seed phrase or private keys.
         </div>
       </section>
     </div>

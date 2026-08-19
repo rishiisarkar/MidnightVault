@@ -1,11 +1,11 @@
 /** Browser-only session markers after a successful gate proof. */
 
-const ACCESS_PREFIX = "midnight_access:";
+const ACCESS_PREFIX = "privora_access:";
 
 export type AccessSession = {
   gateId: string;
   contractId: string | null;
-  txId: string | null;
+  txId: string;
   unlockedAt: number;
 };
 
@@ -28,11 +28,11 @@ export function getGateAccess(gateId: string): AccessSession | null {
     const raw = window.sessionStorage.getItem(key(gateId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<AccessSession>;
-    if (parsed.gateId !== gateId || (parsed.txId !== null && typeof parsed.txId !== "string")) return null;
+    if (parsed.gateId !== gateId || typeof parsed.txId !== "string") return null;
     return {
       gateId: parsed.gateId,
       contractId: typeof parsed.contractId === "string" ? parsed.contractId : null,
-      txId: typeof parsed.txId === "string" ? parsed.txId : null,
+      txId: parsed.txId,
       unlockedAt: typeof parsed.unlockedAt === "number" ? parsed.unlockedAt : Date.now(),
     };
   } catch {

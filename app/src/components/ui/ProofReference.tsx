@@ -20,13 +20,12 @@ type ProofReferenceProps = {
 
 export function ProofReference({
   value,
-  label,
+  label = "Proof reference",
   className = "",
   kind = "transaction",
   network = "preprod",
 }: ProofReferenceProps) {
   const [copied, setCopied] = useState(false);
-  const displayLabel = label ?? (kind === "contract" ? "Contract" : "Transaction");
   const explorerUrl =
     kind === "contract" ? explorerContractUrl(value, network) : explorerTransactionUrl(value, network);
 
@@ -42,7 +41,7 @@ export function ProofReference({
 
   return (
     <div className={`flex flex-wrap items-center gap-x-3 gap-y-2 ${className}`}>
-      <span className="text-xs text-faint">{displayLabel}</span>
+      <span className="text-xs text-faint">{label}</span>
       <code className="min-w-0 break-all font-mono text-xs text-muted">{shorten(value, 8)}</code>
       <button
         type="button"
@@ -50,7 +49,7 @@ export function ProofReference({
         className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-        {copied ? "Copied" : kind === "contract" ? "Copy contract ID" : "Copy transaction ID"}
+        {copied ? "Copied" : "Copy full id"}
       </button>
       {explorerUrl && (
         <a

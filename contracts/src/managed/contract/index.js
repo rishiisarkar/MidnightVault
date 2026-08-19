@@ -152,14 +152,14 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('add_valid_credential',
                                      'argument 1 (as invoked from Typescript)',
-                                     'midnight.compact line 19 char 1',
+                                     'privora.compact line 19 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
         if (!(credential_hash_0.buffer instanceof ArrayBuffer && credential_hash_0.BYTES_PER_ELEMENT === 1 && credential_hash_0.length === 32)) {
           __compactRuntime.typeError('add_valid_credential',
                                      'argument 1 (argument 2 as invoked from Typescript)',
-                                     'midnight.compact line 19 char 1',
+                                     'privora.compact line 19 char 1',
                                      'Bytes<32>',
                                      credential_hash_0)
         }
@@ -187,7 +187,7 @@ export class Contract {
         if (!(typeof(contextOrig_0) === 'object' && contextOrig_0.currentQueryContext != undefined)) {
           __compactRuntime.typeError('verify_access',
                                      'argument 1 (as invoked from Typescript)',
-                                     'midnight.compact line 25 char 1',
+                                     'privora.compact line 25 char 1',
                                      'CircuitContext',
                                      contextOrig_0)
         }
@@ -233,7 +233,7 @@ export class Contract {
     if (!(admin_pk_0.buffer instanceof ArrayBuffer && admin_pk_0.BYTES_PER_ELEMENT === 1 && admin_pk_0.length === 32)) {
       __compactRuntime.typeError('Contract state constructor',
                                  'argument 1 (argument 2 as invoked from Typescript)',
-                                 'midnight.compact line 15 char 1',
+                                 'privora.compact line 15 char 1',
                                  'Bytes<32>',
                                  admin_pk_0)
     }
@@ -344,7 +344,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('get_secret',
                                  'return value',
-                                 'midnight.compact line 9 char 1',
+                                 'privora.compact line 9 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -362,7 +362,7 @@ export class Contract {
     if (!(typeof(result_0) === 'object' && result_0.leaf.buffer instanceof ArrayBuffer && result_0.leaf.BYTES_PER_ELEMENT === 1 && result_0.leaf.length === 32 && Array.isArray(result_0.path) && result_0.path.length === 16 && result_0.path.every((t) => typeof(t) === 'object' && typeof(t.sibling) === 'object' && typeof(t.sibling.field) === 'bigint' && t.sibling.field >= 0 && t.sibling.field <= __compactRuntime.MAX_FIELD && typeof(t.goes_left) === 'boolean'))) {
       __compactRuntime.typeError('get_merkle_path',
                                  'return value',
-                                 'midnight.compact line 10 char 1',
+                                 'privora.compact line 10 char 1',
                                  'struct MerkleTreePath<leaf: Bytes<32>, path: Vector<16, struct MerkleTreePathEntry<sibling: struct MerkleTreeDigest<field: Field>, goes_left: Boolean>>>',
                                  result_0)
     }
@@ -379,7 +379,7 @@ export class Contract {
     if (!(result_0.buffer instanceof ArrayBuffer && result_0.BYTES_PER_ELEMENT === 1 && result_0.length === 32)) {
       __compactRuntime.typeError('get_caller',
                                  'return value',
-                                 'midnight.compact line 13 char 1',
+                                 'privora.compact line 13 char 1',
                                  'Bytes<32>',
                                  result_0)
     }
@@ -586,7 +586,7 @@ export function ledger(stateOrChargedState) {
         if (!(typeof(rt_0) === 'object' && typeof(rt_0.field) === 'bigint' && rt_0.field >= 0 && rt_0.field <= __compactRuntime.MAX_FIELD)) {
           __compactRuntime.typeError('checkRoot',
                                      'argument 1',
-                                     'midnight.compact line 6 char 1',
+                                     'privora.compact line 6 char 1',
                                      'struct MerkleTreeDigest<field: Field>',
                                      rt_0)
         }
@@ -637,14 +637,14 @@ export function ledger(stateOrChargedState) {
         if (!(typeof(index_0) === 'bigint' && index_0 >= 0 && index_0 <= __compactRuntime.MAX_FIELD)) {
           __compactRuntime.typeError('path_for_leaf',
                                      'argument 1',
-                                     'midnight.compact line 6 char 1',
+                                     'privora.compact line 6 char 1',
                                      'Field',
                                      index_0)
         }
         if (!(leaf_0.buffer instanceof ArrayBuffer && leaf_0.BYTES_PER_ELEMENT === 1 && leaf_0.length === 32)) {
           __compactRuntime.typeError('path_for_leaf',
                                      'argument 2',
-                                     'midnight.compact line 6 char 1',
+                                     'privora.compact line 6 char 1',
                                      'Bytes<32>',
                                      leaf_0)
         }
@@ -659,7 +659,7 @@ export function ledger(stateOrChargedState) {
         if (!(leaf_0.buffer instanceof ArrayBuffer && leaf_0.BYTES_PER_ELEMENT === 1 && leaf_0.length === 32)) {
           __compactRuntime.typeError('find_path_for_leaf',
                                      'argument 1',
-                                     'midnight.compact line 6 char 1',
+                                     'privora.compact line 6 char 1',
                                      'Bytes<32>',
                                      leaf_0)
         }
@@ -716,7 +716,7 @@ export function ledger(stateOrChargedState) {
         if (!(elem_0.buffer instanceof ArrayBuffer && elem_0.BYTES_PER_ELEMENT === 1 && elem_0.length === 32)) {
           __compactRuntime.typeError('member',
                                      'argument 1',
-                                     'midnight.compact line 7 char 1',
+                                     'privora.compact line 7 char 1',
                                      'Bytes<32>',
                                      elem_0)
         }

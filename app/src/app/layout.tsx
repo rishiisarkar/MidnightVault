@@ -1,18 +1,12 @@
 import type { Metadata } from "next";
-import { Footer } from "@/components/Footer";
 import { Navigation } from "@/components/Navigation";
+import { Footer } from "@/components/Footer";
 import { Splash } from "@/components/Splash";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Nexora | Private Access Gateway",
-  description: "A Midnight Preprod access gateway for private Nexora credential proofs.",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_LIVE_DEMO_URL || "http://localhost:3000"),
-  openGraph: {
-    title: "Nexora",
-    description: "Private Nexora membership proofs on Midnight Preprod.",
-    type: "website",
-  },
+  title: "Privora  -  Midnight",
+  description: "Prove membership without revealing your private credential. Built on Midnight.",
 };
 
 export default function RootLayout({
@@ -21,8 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="flex min-h-screen flex-col antialiased">
+    <html lang="en" className="h-full antialiased">
+      <body className="flex min-h-full flex-col bg-surface text-primary">
         <Splash />
         <Navigation />
         {children}

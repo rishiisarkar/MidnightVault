@@ -9,7 +9,7 @@ export ledger used_nullifiers: Set<Bytes<32>>;
 witness get_secret(): Bytes<32>;
 witness get_merkle_path(leaf: Bytes<32>): MerkleTreePath<16, Bytes<32>>;
 // Demo trust model: get_caller is a client-supplied witness (wallet CPK in the honest UI path).
-// It is not a signature-bound identity by itself; see TRUST_MODEL.md.
+// It is not a signature-bound identity by itself — see TRUST_MODEL.md.
 witness get_caller(): Bytes<32>;
 
 constructor(admin_pk: Bytes<32>) {

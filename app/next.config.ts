@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     config.experiments = {
       ...(config.experiments ?? {}),
       asyncWebAssembly: true,
-    };
+    };  
     config.resolve.alias = {
       ...(config.resolve.alias ?? {}),
       "isomorphic-ws": wsShim,

@@ -2,7 +2,6 @@ export type GateRecord = {
   id: string;
   name: string;
   description: string;
-  privateContent: string;
   network: "preprod" | "undeployed";
   contractId: string | null;
   deploymentTxId: string | null;
@@ -11,21 +10,16 @@ export type GateRecord = {
   contractVersion: "credential-hash-v2";
 };
 
-const STORAGE_KEY = "midnight_gates";
-const CONFIGURED_CONTRACT_ID = (process.env.NEXT_PUBLIC_MIDNIGHT_CONTRACT_ADDRESS ?? "")
-  .trim()
-  .replace(/^0x/i, "")
-  .toLowerCase() || null;
+const STORAGE_KEY = "privora_gates";
 
 export const DEFAULT_GATE: GateRecord = {
   id: "genesis",
   name: "Genesis Vault",
-  description: "A private launch room for approved Nexora members.",
-  privateContent: "Welcome to the private launch room.\n\nMembers-only resources will appear here after verification.",
+  description: "A private launch room for approved Privora members.",
   network: "preprod",
-  contractId: CONFIGURED_CONTRACT_ID,
+  contractId: null,
   deploymentTxId: null,
-  status: CONFIGURED_CONTRACT_ID ? "published" : "draft",
+  status: "draft",
   oneTimeProof: true,
   contractVersion: "credential-hash-v2",
 };
@@ -67,14 +61,10 @@ export function formatContractId(value: string): string {
 /** Migrate any gate records that still store `0x...` contract ids. */
 function sanitizeGate(gate: GateRecord): GateRecord {
   const network: GateRecord["network"] = "preprod";
-  const privateContent =
-    typeof gate.privateContent === "string" && gate.privateContent.trim()
-      ? gate.privateContent
-      : DEFAULT_GATE.privateContent;
-  if (!gate.contractId) return { ...gate, network, privateContent };
+  if (!gate.contractId) return { ...gate, network };
   const bare = normalizeContractId(gate.contractId);
-  if (bare === gate.contractId) return { ...gate, network, privateContent };
-  return { ...gate, network, privateContent, contractId: bare || null };
+  if (bare === gate.contractId) return { ...gate, network };
+  return { ...gate, network, contractId: bare || null };
 }
 
 /**
@@ -146,7 +136,6 @@ export function restorePublishedGate(input: {
   contractId: string;
   name?: string;
   description?: string;
-  privateContent?: string;
   network?: GateRecord["network"];
   deploymentTxId?: string | null;
   id?: string;
@@ -163,7 +152,6 @@ export function restorePublishedGate(input: {
     id,
     name: (input.name?.trim() || previous.name || DEFAULT_GATE.name).slice(0, 80),
     description: (input.description?.trim() || previous.description || DEFAULT_GATE.description).slice(0, 500),
-    privateContent: (input.privateContent?.trim() || previous.privateContent || DEFAULT_GATE.privateContent).slice(0, 2000),
     network: "preprod",
     contractId,
     deploymentTxId: input.deploymentTxId ?? previous.deploymentTxId ?? null,
@@ -194,7 +182,6 @@ export function resolveGate(params: GateSearchParams = {}): GateRecord {
       id: fromStore?.id ?? gateParam ?? gateIdFromContract(contractId),
       name,
       description,
-      privateContent: fromStore?.privateContent || DEFAULT_GATE.privateContent,
       network,
       contractId,
       deploymentTxId: fromStore?.deploymentTxId ?? null,
@@ -226,9 +213,6 @@ export function gateUrl(gate: GateRecord): string {
   }
   if (gate.name && gate.name !== DEFAULT_GATE.name) {
     params.set("name", gate.name);
-  }
-  if (gate.description && gate.description !== DEFAULT_GATE.description) {
-    params.set("description", gate.description);
   }
   if (gate.network && gate.network !== "preprod") {
     params.set("network", gate.network);

@@ -8,13 +8,13 @@ export function isActiveProgress(stage: ProgressStage): boolean {
 
 export function progressLabel(stage: ProgressStage, context: "enroll" | "prove" | "deploy" = "prove"): string {
   const map: Record<ProgressStage, string> = {
-    idle: context === "enroll" ? "Ready to issue" : context === "deploy" ? "Ready to publish" : "Ready",
-    preparing: context === "deploy" ? "Preparing gate" : context === "enroll" ? "Preparing credential" : "Preparing credential",
-    proving: context === "deploy" ? "Preparing privacy contract" : "Generating private proof",
-    balancing: "Preparing wallet approval",
+    idle: context === "enroll" ? "Ready to issue" : context === "deploy" ? "Ready to deploy" : "Ready",
+    preparing: "Preparing transaction",
+    proving: "Generating zero-knowledge proof",
+    balancing: "Balancing transaction fees",
     awaiting_wallet: "Approve in your wallet",
-    submitted: "Confirming on Midnight",
-    confirming: "Finalizing",
+    submitted: "Submitted to network",
+    confirming: "Waiting for network confirmation",
     confirmed: context === "enroll" ? "Credential enrolled" : context === "deploy" ? "Gate published" : "Access confirmed",
     error: "Needs attention",
   };
@@ -24,17 +24,17 @@ export function progressLabel(stage: ProgressStage, context: "enroll" | "prove" 
 export function progressDetail(stage: ProgressStage): string {
   switch (stage) {
     case "preparing":
-      return "Preparing the request from the current gate state.";
+      return "Building the unproven Midnight transaction from the current contract state.";
     case "proving":
-      return "Generating the private proof. This can take several seconds.";
+      return "Creating the zero-knowledge proof. This can take several seconds.";
     case "balancing":
-      return "Your wallet is preparing the final request.";
+      return "The wallet is adding fees and sealing the transaction.";
     case "awaiting_wallet":
       return "Confirm the request in your wallet extension when prompted.";
     case "submitted":
-      return "The request was sent to Midnight Preprod.";
+      return "The sealed transaction was sent to the selected Midnight network.";
     case "confirming":
-      return "Waiting until Midnight confirms the gate state.";
+      return "Polling the Midnight indexer until the on-chain state updates.";
     case "confirmed":
       return "The network has confirmed this action.";
     case "error":

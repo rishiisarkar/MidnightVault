@@ -20,7 +20,6 @@ type WalletApi = {
   getProvingProvider?: (provider: unknown) => Promise<unknown>;
   balanceUnsealedTransaction?: (tx: string, options?: { payFees?: boolean }) => Promise<{ tx?: string }>;
   submitTransaction?: (tx: string) => Promise<unknown>;
-  getTxHistory?: (pageNumber: number, pageSize: number) => Promise<Array<{ txHash?: string; txStatus?: unknown }>>;
   getConnectionStatus?: () => Promise<{ status: string }>;
   hintUsage?: (methodNames: string[]) => Promise<void>;
   getDustBalance?: () => Promise<{ balance: bigint | number | string; cap: bigint | number | string }>;
@@ -28,9 +27,7 @@ type WalletApi = {
   enable?: () => Promise<void> | void;
 };
 
-export type WalletOption = Pick<InitialAPI, "connect" | "name" | "rdns" | "apiVersion" | "icon"> & {
-  injectionKey: string;
-};
+export type WalletOption = Pick<InitialAPI, "connect" | "name" | "rdns" | "apiVersion" | "icon">;
 
 type SerializedTransaction = { serialize: () => Uint8Array };
 
@@ -45,32 +42,10 @@ export type SessionInfo = {
   unshieldedAddress: string | null;
 };
 
-export type WalletKind = "lace" | "1am";
-
-export type WalletActionResult = {
-  success: boolean;
-  confirmed: boolean;
-  txHash?: string;
-  wallet: WalletKind;
-  status?: string;
-  rawResult?: unknown;
-};
-
-export type AccessVerificationResult = WalletActionResult;
-
-export type CredentialEnrollmentResult = WalletActionResult & {
+export type CredentialEnrollmentResult = {
   txId: string | null;
   credentialHash: Uint8Array;
   alreadyEnrolled: boolean;
-};
-
-type WalletSubmitResult = {
-  submitted: boolean;
-  confirmed: boolean;
-  txHash: string | null;
-  wallet: WalletKind;
-  status: string;
-  rawResult?: unknown;
 };
 
 export const APP_NETWORK: Exclude<NetworkId, "undeployed"> = "preprod";
@@ -78,10 +53,10 @@ export const APP_NETWORK_LABEL = "Midnight Preprod";
 
 export const PREPROD_CONFIG: SessionInfo = {
   networkId: "preprod",
-  indexerUrl: process.env.NEXT_PUBLIC_MIDNIGHT_INDEXER_HTTP_URL ?? "https://indexer.preprod.midnight.network/api/v4/graphql",
-  indexerWsUrl: process.env.NEXT_PUBLIC_MIDNIGHT_INDEXER_WS_URL ?? "wss://indexer.preprod.midnight.network/api/v4/graphql/ws",
-  proofServerUrl: process.env.NEXT_PUBLIC_MIDNIGHT_PROOF_SERVER_URL ?? "http://localhost:6300",
-  nodeUrl: process.env.NEXT_PUBLIC_MIDNIGHT_NODE_URL ?? "https://rpc.preprod.midnight.network",
+  indexerUrl: "https://indexer.preprod.midnight.network/api/v4/graphql",
+  indexerWsUrl: "wss://indexer.preprod.midnight.network/api/v4/graphql/ws",
+  proofServerUrl: "https://proof-server.preprod.midnight.network",
+  nodeUrl: "https://rpc.preprod.midnight.network",
   unshieldedAddress: null,
 };
 
@@ -241,9 +216,7 @@ function walletKeyToString(value: unknown): string {
   throw new Error("Wallet returned an unsupported key format.");
 }
 
-const SIGNING_KEY_STORAGE = "midnight_signing_keys";
-let sharedConnectionPromise: Promise<SessionInfo> | null = null;
-let sharedConnectionKey: string | null = null;
+const SIGNING_KEY_STORAGE = "privora_signing_keys";
 
 function persistSigningKey(contractAddress: string, signingKey: unknown): void {
   if (typeof window === "undefined" || signingKey == null) return;
@@ -299,59 +272,6 @@ function getErrorMessage(error: unknown): string {
 
 function toBigInt(value: bigint | number | string): bigint {
   return typeof value === "bigint" ? value : BigInt(value);
-}
-
-function normalizeTxHash(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().replace(/^0x/i, "").toLowerCase();
-  if (!/^[0-9a-f]{64}$/.test(normalized)) return null;
-  const prefixBytes = hexToUint8Array(normalized.slice(0, Math.min(normalized.length, 48)));
-  const asciiPrefix = Array.from(prefixBytes, (byte) => String.fromCharCode(byte)).join("");
-  if (asciiPrefix.startsWith("midnight:transaction")) return null;
-  return normalized;
-}
-
-function extractTxHash(value: unknown): string | null {
-  const direct = normalizeTxHash(value);
-  if (direct) return direct;
-  if (!value || typeof value !== "object") return null;
-
-  const record = value as Record<string, unknown>;
-  for (const key of ["txHash", "transactionHash", "hash", "txId", "transactionId", "id"]) {
-    const hash = normalizeTxHash(record[key]);
-    if (hash) return hash;
-  }
-  for (const key of ["transaction", "result", "data"]) {
-    const nested = extractTxHash(record[key]);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-function explicitFailedWalletStatus(value: unknown): string | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  if (record.error != null) return getErrorMessage(record.error);
-  for (const key of ["status", "txStatus", "transactionStatus", "result", "state"]) {
-    const raw = record[key];
-    if (typeof raw !== "string") continue;
-    const normalized = raw.toLowerCase();
-    if (["fail", "failed", "failure", "rejected", "error"].includes(normalized)) return raw;
-  }
-  for (const key of ["transaction", "data"]) {
-    const nested = explicitFailedWalletStatus(record[key]);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-function logTxDiagnostics(label: string, info: Record<string, unknown>): void {
-  if (process.env.NODE_ENV === "production") return;
-  try {
-    console.info(`[Midnight:${label}]`, info);
-  } catch {
-    // diagnostics only
-  }
 }
 
 async function queryIndexer(
@@ -453,40 +373,7 @@ function createPrivateStateProvider() {
   };
 }
 
-function isWalletLike(value: unknown): value is Pick<InitialAPI, "connect" | "name" | "rdns" | "apiVersion" | "icon"> {
-  return typeof value === "object"
-    && value !== null
-    && typeof (value as { connect?: unknown }).connect === "function";
-}
-
-function walletIdentity(wallet: Partial<WalletOption>): string {
-  return `${wallet.injectionKey ?? ""} ${wallet.name ?? ""} ${wallet.rdns ?? ""}`.toLowerCase();
-}
-
-function normalizeWalletName(wallet: WalletOption): WalletOption {
-  if (wallet.injectionKey === "1am" || walletIdentity(wallet).includes("1am")) {
-    return { ...wallet, name: "1AM Wallet" };
-  }
-  if (walletIdentity(wallet).includes("lace") || walletIdentity(wallet).includes("cardano")) {
-    return { ...wallet, name: "Lace" };
-  }
-  return wallet;
-}
-
-function isLaceOption(wallet: Partial<WalletOption>): boolean {
-  const identity = walletIdentity(wallet);
-  return identity.includes("lace") || identity.includes("cardano");
-}
-
-function isOneAmOption(wallet: Partial<WalletOption>): boolean {
-  return wallet.injectionKey === "1am" || walletIdentity(wallet).includes("1am") || walletIdentity(wallet).includes("1 am");
-}
-
-function walletConnectionKey(wallet: WalletOption, network: NetworkId): string {
-  return `${network}:${wallet.injectionKey}:${wallet.rdns}:${wallet.apiVersion}`;
-}
-
-export class MidnightClient {
+export class PrivoraClient {
   public api: WalletApi | null = null;
   public addresses: WalletAddresses | null = null;
   public session: SessionInfo | null = null;
@@ -494,50 +381,19 @@ export class MidnightClient {
   public isConnected = false;
   public walletName: string | null = null;
   public walletRdns: string | null = null;
-  public walletInjectionKey: string | null = null;
-  public isConnecting = false;
   private transactionProgressListener: ((stage: TransactionProgressStage) => void) | null = null;
-  private transactionSubmitContext: "credential" | "access" = "credential";
 
   getInjectedWallets(): WalletOption[] {
     if (typeof window === "undefined") return [];
-    const injected = window.midnight ?? {};
-    const wallets = Object.entries(injected)
-      .filter((entry): entry is [string, Pick<InitialAPI, "connect" | "name" | "rdns" | "apiVersion" | "icon">] => isWalletLike(entry[1]))
-      .map(([injectionKey, wallet]) => normalizeWalletName({
-        injectionKey,
-        connect: wallet.connect.bind(wallet),
-        name: wallet.name,
-        rdns: wallet.rdns,
-        apiVersion: wallet.apiVersion,
-        icon: wallet.icon,
-      }));
-
-    const oneAm = isWalletLike(injected["1am"])
-      ? normalizeWalletName({
-          injectionKey: "1am",
-          connect: injected["1am"].connect.bind(injected["1am"]),
-          name: injected["1am"].name,
-          rdns: injected["1am"].rdns,
-          apiVersion: injected["1am"].apiVersion,
-          icon: injected["1am"].icon,
-        })
-      : null;
-    const lace = wallets.find(isLaceOption) ?? null;
-    const ordered = [lace, oneAm, ...wallets.filter((wallet) => !isLaceOption(wallet) && !isOneAmOption(wallet))];
-    const seen = new Set<string>();
-    return ordered.filter((wallet): wallet is WalletOption => {
-      if (!wallet) return false;
-      const key = `${wallet.injectionKey}:${wallet.rdns}:${wallet.apiVersion}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return isLaceOption(wallet) || isOneAmOption(wallet);
-    });
+    return Object.values(window.midnight ?? {}).filter(
+      (value): value is WalletOption => typeof value === "object" && value !== null && typeof (value as { connect?: unknown }).connect === "function",
+    );
   }
 
   async detectWallet(): Promise<boolean> {
     if (typeof window === "undefined") return false;
-    return this.getInjectedWallets().length > 0;
+    return Object.values((window as Window & { midnight?: Record<string, unknown> }).midnight ?? {})
+      .some((value) => typeof value === "object" && value !== null && "connect" in value);
   }
 
   async getCredentialHash(secret: Uint8Array): Promise<Uint8Array> {
@@ -552,125 +408,13 @@ export class MidnightClient {
     ));
   }
 
-  private async readWalletTxHashes(pageSize = 20): Promise<Set<string> | null> {
-    if (!this.api?.getTxHistory) return null;
-    const hashes = new Set<string>();
-    let sawHistoryPage = false;
-    for (const pageNumber of [0, 1]) {
-      try {
-        const entries = await this.api.getTxHistory(pageNumber, pageSize);
-        sawHistoryPage = true;
-        for (const entry of entries ?? []) {
-          const hash = extractTxHash(entry);
-          if (hash) hashes.add(hash);
-        }
-      } catch (error) {
-        logTxDiagnostics("history-read-failed", {
-          wallet: this.walletName,
-          pageNumber,
-          message: getErrorMessage(error),
-        });
-      }
-    }
-    return sawHistoryPage ? hashes : null;
-  }
-
-  private async waitForNewWalletTxHash(
-    previousHashes: Set<string> | null,
-    timeoutMs = 45000,
-  ): Promise<string | null> {
-    if (!this.api?.getTxHistory || !previousHashes) return null;
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      const currentHashes = await this.readWalletTxHashes();
-      if (!currentHashes) return null;
-      for (const hash of currentHashes) {
-        if (!previousHashes.has(hash)) return hash;
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 1500));
-    }
-    return null;
-  }
-
-  private walletKind(): WalletKind {
-    return this.isOneAmWallet() ? "1am" : "lace";
-  }
-
-  private async submitBalancedTransaction(
-    tx: SerializedTransaction,
-    context: "deploy" | "credential" | "access",
-  ): Promise<WalletSubmitResult> {
-    this.transactionProgressListener?.("awaiting_wallet");
-    if (!this.api?.submitTransaction) throw new Error("Wallet cannot submit a transaction.");
-    if (!tx || typeof tx.serialize !== "function") throw new Error("Cannot submit an invalid balanced transaction.");
-
-    let serialized: Uint8Array;
-    try {
-      serialized = tx.serialize();
-    } catch (error) {
-      throw new Error(`Failed to serialize balanced transaction before submit: ${getErrorMessage(error)}`);
-    }
-
-    const beforeSubmit = await this.readWalletTxHashes();
-    const result = await this.api.submitTransaction(uint8ArrayToHex(serialized));
-    this.transactionProgressListener?.("submitted");
-    const failedStatus = explicitFailedWalletStatus(result);
-    if (failedStatus) throw new Error(`Wallet returned failed transaction status: ${failedStatus}`);
-
-    const directHash = extractTxHash(result);
-    logTxDiagnostics("submit-result", {
-      context,
-      wallet: this.walletName,
-      resultType: result === null ? "null" : typeof result,
-      resultKeys: result && typeof result === "object" ? Object.keys(result as Record<string, unknown>) : [],
-      directHash: Boolean(directHash),
-      historyAvailable: Boolean(beforeSubmit),
-    });
-    if (directHash) {
-      return {
-        submitted: true,
-        confirmed: false,
-        txHash: directHash,
-        wallet: this.walletKind(),
-        status: "submitted",
-        rawResult: result,
-      };
-    }
-
-    const historyHash = await this.waitForNewWalletTxHash(beforeSubmit);
-    logTxDiagnostics("submit-history", {
-      context,
-      wallet: this.walletName,
-      historyHash: Boolean(historyHash),
-    });
-    return {
-      submitted: true,
-      confirmed: historyHash ? false : true,
-      txHash: historyHash,
-      wallet: this.walletKind(),
-      status: historyHash ? "submitted" : "confirmed",
-      rawResult: result,
-    };
-  }
-
-  private async submitBalancedTransactionForHash(
-    tx: SerializedTransaction,
-    context: "deploy" | "credential" | "access",
-  ): Promise<string | null> {
-    const result = await this.submitBalancedTransaction(tx, context);
-    return result.txHash;
-  }
-
   private async findWallet(selectedWallet?: WalletOption): Promise<WalletOption> {
     if (typeof window === "undefined") throw new Error("Wallet connection is only available in a browser.");
     if (selectedWallet) return selectedWallet;
     const deadline = Date.now() + 6000;
 
     while (Date.now() < deadline) {
-      const wallets = this.getInjectedWallets();
-      const oneAm = wallets.find(isOneAmOption);
-      const lace = wallets.find(isLaceOption);
-      const wallet = lace ?? oneAm;
+      const wallet = this.getInjectedWallets()[0];
       if (wallet) return wallet;
       await new Promise((resolve) => window.setTimeout(resolve, 100));
     }
@@ -678,128 +422,69 @@ export class MidnightClient {
     throw new Error("NO_WALLET");
   }
 
-  private async currentConnectionStatus(network: NetworkId, selectedWallet?: WalletOption): Promise<SessionInfo | null> {
-    if (!this.api || !this.session || !this.isConnected) return null;
-    if (selectedWallet) {
-      const sameWallet = this.walletInjectionKey === selectedWallet.injectionKey
-        && this.walletRdns === selectedWallet.rdns;
-      if (!sameWallet) return null;
+  async connectWallet(network: NetworkId = APP_NETWORK, selectedWallet?: WalletOption): Promise<SessionInfo> {
+    if (network !== APP_NETWORK) throw new Error(`NETWORK_MISMATCH:${network}`);
+    const wallet = await this.findWallet(selectedWallet);
+    let api: WalletApi;
+    try {
+      api = await wallet.connect(network) as unknown as WalletApi;
+    } catch (error) {
+      throw new Error(`WALLET_CONNECT_FAILED:${getErrorMessage(error)}`);
     }
-
-    if (this.api.getConnectionStatus) {
+    if (api.hintUsage) {
       try {
-        const status = await this.api.getConnectionStatus();
-        if (status.status !== "connected") return null;
+        await api.hintUsage([
+          "getShieldedAddresses",
+          "getProvingProvider",
+          "balanceUnsealedTransaction",
+          "submitTransaction",
+        ]);
+      } catch (error) {
+        throw new Error(`WALLET_PERMISSION_FAILED:${getErrorMessage(error)}`);
+      }
+    }
+    if (api.getConnectionStatus) {
+      try {
+        const status = await api.getConnectionStatus();
+        if (status.status !== "connected") throw new Error("WALLET_DISCONNECTED");
         if ("networkId" in status && status.networkId !== network) {
           throw new Error(`NETWORK_MISMATCH:${status.networkId}`);
         }
       } catch (error) {
-        if (error instanceof Error && error.message.startsWith("NETWORK_MISMATCH:")) throw error;
-        return null;
+        if (error instanceof Error && (error.message === "WALLET_DISCONNECTED" || error.message.startsWith("NETWORK_MISMATCH:"))) throw error;
+        throw new Error(`WALLET_STATUS_FAILED:${getErrorMessage(error)}`);
       }
     }
+    if (!api.getConfiguration) throw new Error("WALLET_CONFIG_UNAVAILABLE");
+    const [configuration, address] = await Promise.all([
+      api.getConfiguration(),
+      api.getUnshieldedAddress?.() ?? Promise.resolve({}),
+    ]);
 
-    if (this.session.networkId !== network) throw new Error(`NETWORK_MISMATCH:${this.session.networkId}`);
-    return this.session;
-  }
+    const config = configuration as Record<string, unknown>;
+    const actualNetwork = getString(config.networkId);
+    if (actualNetwork && actualNetwork !== network) throw new Error(`NETWORK_MISMATCH_CONFIG:${actualNetwork}`);
+    const fallback = networkConfig(network);
+    const session: SessionInfo = {
+      networkId: APP_NETWORK,
+      indexerUrl: getString(config.indexerUri) ?? fallback.indexerUrl,
+      indexerWsUrl: getString(config.indexerWsUri) ?? fallback.indexerWsUrl,
+      proofServerUrl: getString(config.proverServerUri) ?? fallback.proofServerUrl,
+      nodeUrl: getString(config.substrateNodeUri) ?? fallback.nodeUrl,
+      unshieldedAddress: (address as { unshieldedAddress?: string }).unshieldedAddress ?? null,
+    };
 
-  async connectWallet(network: NetworkId = APP_NETWORK, selectedWallet?: WalletOption): Promise<SessionInfo> {
-    if (network !== APP_NETWORK) throw new Error(`NETWORK_MISMATCH:${network}`);
-    const existing = await this.currentConnectionStatus(network, selectedWallet);
-    if (existing) return existing;
-
-    const wallet = await this.findWallet(selectedWallet);
-    const connectionKey = walletConnectionKey(wallet, network);
-    if (sharedConnectionPromise) {
-      if (sharedConnectionKey === connectionKey) return sharedConnectionPromise;
-      throw new Error("WALLET_CONNECT_PENDING");
-    }
-
-    this.isConnecting = true;
-    sharedConnectionKey = connectionKey;
-    sharedConnectionPromise = (async () => {
-      let api: WalletApi;
-      try {
-        api = await wallet.connect(network) as unknown as WalletApi;
-      } catch (error) {
-        const message = getErrorMessage(error);
-        if (message.toLowerCase().includes("already pending")) throw new Error("WALLET_CONNECT_ALREADY_PENDING");
-        throw new Error(`WALLET_CONNECT_FAILED:${message}`);
-      }
-      if (api.hintUsage) {
-        try {
-          const methods: Array<keyof NonNullable<typeof api>> = [];
-          if (api.getShieldedAddresses) methods.push("getShieldedAddresses");
-          if (api.getProvingProvider) methods.push("getProvingProvider");
-          if (api.balanceUnsealedTransaction) methods.push("balanceUnsealedTransaction");
-          if (api.submitTransaction) methods.push("submitTransaction");
-          await api.hintUsage(methods as never);
-        } catch (error) {
-          throw new Error(`WALLET_PERMISSION_FAILED:${getErrorMessage(error)}`);
-        }
-      }
-      if (api.getConnectionStatus) {
-        try {
-          const status = await api.getConnectionStatus();
-          if (status.status !== "connected") throw new Error("WALLET_DISCONNECTED");
-          if ("networkId" in status && status.networkId !== network) {
-            throw new Error(`NETWORK_MISMATCH:${status.networkId}`);
-          }
-        } catch (error) {
-          if (error instanceof Error && (error.message === "WALLET_DISCONNECTED" || error.message.startsWith("NETWORK_MISMATCH:"))) throw error;
-          throw new Error(`WALLET_STATUS_FAILED:${getErrorMessage(error)}`);
-        }
-      }
-      if (!api.getConfiguration) throw new Error("WALLET_CONFIG_UNAVAILABLE");
-      const [configuration, address] = await Promise.all([
-        api.getConfiguration(),
-        api.getUnshieldedAddress?.() ?? Promise.resolve({}),
-      ]);
-
-      const config = configuration as Record<string, unknown>;
-      const actualNetwork = getString(config.networkId);
-      if (actualNetwork && actualNetwork !== network) throw new Error(`NETWORK_MISMATCH_CONFIG:${actualNetwork}`);
-      const fallback = networkConfig(network);
-      const session: SessionInfo = {
-        networkId: APP_NETWORK,
-        indexerUrl: getString(config.indexerUri) ?? fallback.indexerUrl,
-        indexerWsUrl: getString(config.indexerWsUri) ?? fallback.indexerWsUrl,
-        proofServerUrl: getString(config.proverServerUri) ?? fallback.proofServerUrl,
-        nodeUrl: getString(config.substrateNodeUri) ?? fallback.nodeUrl,
-        unshieldedAddress: (address as { unshieldedAddress?: string }).unshieldedAddress ?? null,
-      };
-
-      this.api = api as unknown as WalletApi;
-      this.walletName = wallet.name;
-      this.walletRdns = wallet.rdns;
-      this.walletInjectionKey = wallet.injectionKey;
-      this.addresses = null;
-      this.providers = null;
-      this.session = session;
-      this.isConnected = true;
-      return session;
-    })();
-
-    try {
-      return await sharedConnectionPromise;
-    } finally {
-      this.isConnecting = false;
-      sharedConnectionPromise = null;
-      sharedConnectionKey = null;
-    }
-  }
-
-  async loadWalletAddresses(): Promise<WalletAddresses> {
-    if (!this.api) throw new Error("WALLET_NOT_CONNECTED");
-    if (!this.addresses) {
-      if (!this.api.getShieldedAddresses) throw new Error("Wallet did not expose shielded transaction keys.");
-      this.addresses = await this.api.getShieldedAddresses();
-    }
-    return this.addresses;
+    this.api = api as unknown as WalletApi;
+    this.walletName = wallet.name;
+    this.walletRdns = wallet.rdns;
+    this.addresses = null;
+    this.session = session;
+    this.isConnected = true;
+    return session;
   }
 
   /**
-   * Clear the local Midnight wallet session.
+   * Clear the local Privora wallet session.
    * If the extension exposes disconnect(), call it so the dApp is no longer authorized.
    */
   async disconnect(): Promise<void> {
@@ -811,8 +496,6 @@ export class MidnightClient {
     this.isConnected = false;
     this.walletName = null;
     this.walletRdns = null;
-    this.walletInjectionKey = null;
-    this.isConnecting = false;
     this.transactionProgressListener = null;
 
     if (api?.disconnect) {
@@ -822,10 +505,6 @@ export class MidnightClient {
         // Extension may not implement disconnect; local session is already cleared.
       }
     }
-  }
-
-  dispose(): void {
-    this.transactionProgressListener = null;
   }
 
   private async ensureProviders(onProgress?: (stage: TransactionProgressStage) => void): Promise<MidnightProviders> {
@@ -858,7 +537,7 @@ export class MidnightClient {
       ]);
 
     setNetworkId(this.session.networkId);
-    const assetBaseUrl = new URL("/contract/Midnight/", window.location.origin).toString();
+    const assetBaseUrl = new URL("/contract/Privora/", window.location.origin).toString();
     const zkConfigProvider = new FetchZkConfigProvider(assetBaseUrl, window.fetch.bind(window));
     for (const circuitId of ["add_valid_credential", "verify_access"] as const) {
       try {
@@ -953,10 +632,14 @@ export class MidnightClient {
 
     // Keep balanced txs as raw hex wrappers. Re-hydrating via Transaction.deserialize() across
     // separately loaded ledger WASM instances causes "__wbg_ptr" crashes in the browser.
-    const wrapBalancedHex = (txHex: string): SerializedTransaction => {
+    const wrapBalancedHex = (txHex: string): SerializedTransaction & { identifiers: () => string[] } => {
       const bytes = hexToUint8Array(txHex);
       return {
         serialize: () => bytes,
+        identifiers: () => {
+          // Prefer the first 32 bytes of the sealed payload as a stable watch id fallback.
+          return bytes.length >= 32 ? [uint8ArrayToHex(bytes.slice(0, 32))] : [];
+        },
       };
     };
 
@@ -978,7 +661,40 @@ export class MidnightClient {
       },
     };
     const midnightProvider = {
-      submitTx: async (tx: SerializedTransaction) => this.submitBalancedTransactionForHash(tx, this.transactionSubmitContext),
+      submitTx: async (tx: SerializedTransaction) => {
+        progress("awaiting_wallet");
+        if (!this.api?.submitTransaction) throw new Error("Wallet cannot submit a transaction.");
+        if (!tx || typeof tx.serialize !== "function") throw new Error("Cannot submit an invalid balanced transaction.");
+        let serialized: Uint8Array;
+        try {
+          serialized = tx.serialize();
+        } catch (error) {
+          throw new Error(`Failed to serialize balanced transaction before submit: ${getErrorMessage(error)}`);
+        }
+        const result = await this.api.submitTransaction(uint8ArrayToHex(serialized));
+        progress("submitted");
+        if (typeof result === "string" && result) return result;
+        if (typeof result === "object" && result !== null) {
+          const id = (result as { transactionId?: unknown; id?: unknown }).transactionId ?? (result as { id?: unknown }).id;
+          if (typeof id === "string" && id) return id;
+        }
+        const identifiers = (tx as SerializedTransaction & { identifiers?: () => unknown[] }).identifiers;
+        if (typeof identifiers === "function") {
+          const identifier = identifiers()[0];
+          if (identifier !== undefined && identifier !== null && String(identifier).length > 0) {
+            return String(identifier);
+          }
+        }
+        // 1AM resolves submitTransaction with void even when the tx was successfully broadcast
+        // and confirmed on-chain. Return a pseudo-id so the caller can proceed to indexer-based
+        // confirmation polling (which uses contractAddress, not txId).
+        if (this.isOneAmWallet()) {
+          console.warn("[Privora] 1AM returned no transaction id from submitTransaction - will fall through to indexer confirmation.");
+          return uint8ArrayToHex(serialized).slice(0, 64);
+        }
+        // Last resort for Lace: watchable pseudo-id from the sealed bytes.
+        return uint8ArrayToHex(serialized).slice(0, 64);
+      },
     };
 
     const proofProvider = {
@@ -1044,7 +760,7 @@ export class MidnightClient {
     }
     const [{ Contract }, { CompiledContract }, { createUnprovenDeployTx }, { sampleSigningKey }] =
       await Promise.all([
-        import("../../public/contract/Midnight/contract/index.js"),
+        import("../../public/contract/Privora/contract/index.js"),
         import("@midnight-ntwrk/compact-js"),
         import("@midnight-ntwrk/midnight-js-contracts"),
         import("@midnight-ntwrk/compact-runtime"),
@@ -1054,8 +770,8 @@ export class MidnightClient {
       get_merkle_path: (_context: unknown, leaf: Uint8Array) => [null, { leaf, path: [] }] as [null, { leaf: Uint8Array; path: never[] }],
       get_caller: () => [null, new Uint8Array(32)] as [null, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Midnight", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
+    const compiledContract = CompiledContract.make("Privora", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
     const publicKey = this.addresses?.shieldedCoinPublicKey ?? this.addresses?.coinPublicKey;
     if (!publicKey || !this.session) throw new Error("Wallet did not return an administrator key.");
     let adminKey: Uint8Array;
@@ -1127,9 +843,10 @@ export class MidnightClient {
       }
     };
 
-    let txId: string | null;
+    let submitted: unknown;
     try {
-      txId = await this.submitBalancedTransactionForHash({ serialize: () => hexToUint8Array(balancedHex) }, "deploy");
+      if (!this.api?.submitTransaction) throw new Error("Wallet cannot submit a transaction.");
+      submitted = await this.api.submitTransaction(balancedHex);
     } catch (error) {
       // Even if submit throws, Lace sometimes broadcasts first. Persist the signing key so the
       // operator can use "Check deployment confirmation". For "temporarily banned" the tx did
@@ -1141,6 +858,13 @@ export class MidnightClient {
       throw new Error(`DEPLOY_SUBMIT:contractId=${contractId}:${detail}`);
     }
     await persistKey();
+    const txId = typeof submitted === "string" && submitted
+      ? submitted
+      : typeof submitted === "object" && submitted !== null && typeof (submitted as { transactionId?: unknown }).transactionId === "string"
+        ? (submitted as { transactionId: string }).transactionId
+        : typeof submitted === "object" && submitted !== null && typeof (submitted as { id?: unknown }).id === "string"
+          ? (submitted as { id: string }).id
+          : null;
 
     // 1AM resolves submitTransaction with void/undefined even when the transaction was
     // successfully broadcast and confirmed on-chain. Instead of throwing, allow the deploy
@@ -1148,7 +872,7 @@ export class MidnightClient {
     // and does not require a txId.
     if (!txId && this.isOneAmWallet()) {
       console.warn(
-        `[Midnight] 1AM returned no transaction id for deploy (contractId=${contractId}). ` +
+        `[Privora] 1AM returned no transaction id for deploy (contractId=${contractId}). ` +
         `Proceeding to indexer confirmation - the tx may have been broadcast successfully.`,
       );
     }
@@ -1272,7 +996,7 @@ export class MidnightClient {
     }
   }
 
-  async verifyCredential(secret: Uint8Array, contractId: string, onProgress?: (stage: TransactionProgressStage) => void): Promise<AccessVerificationResult> {
+  async verifyCredential(secret: Uint8Array, contractId: string, onProgress?: (stage: TransactionProgressStage) => void): Promise<string> {
     onProgress?.("preparing");
     const providers = await this.ensureProviders(onProgress);
     if (!this.addresses) throw new Error("WALLET_SESSION:Wallet did not return shielded addresses.");
@@ -1282,7 +1006,7 @@ export class MidnightClient {
     const chainAddress = toChainContractAddress(contractId);
 
     const [{ Contract }, { CompiledContract }, { createUnprovenCallTx }] = await Promise.all([
-      import("../../public/contract/Midnight/contract/index.js"),
+      import("../../public/contract/Privora/contract/index.js"),
       import("@midnight-ntwrk/compact-js"),
       import("@midnight-ntwrk/midnight-js-contracts"),
     ]);
@@ -1312,8 +1036,8 @@ export class MidnightClient {
       },
       get_caller: (context: { privateState: unknown }) => [context.privateState, callerBytes] as [unknown, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Midnight", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
+    const compiledContract = CompiledContract.make("Privora", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
 
     const sdkContractAddress = toChainContractAddress(chainAddress);
     providers.privateStateProvider.setContractAddress(sdkContractAddress);
@@ -1337,6 +1061,7 @@ export class MidnightClient {
     const pipeline = providers as unknown as {
       proofProvider: { proveTx: (tx: unknown) => Promise<SerializedTransaction> };
       walletProvider: { balanceTx: (tx: SerializedTransaction) => Promise<SerializedTransaction> };
+      midnightProvider: { submitTx: (tx: SerializedTransaction) => Promise<string> };
     };
 
     let provenTx: SerializedTransaction;
@@ -1353,21 +1078,14 @@ export class MidnightClient {
       throw new Error(`ACCESS_BALANCE:${getErrorMessage(error)}`);
     }
 
-    let submitResult: WalletSubmitResult;
+    let txId: string;
     try {
-      this.transactionSubmitContext = "access";
-      submitResult = await this.submitBalancedTransaction(balancedTx, "access");
+      txId = await pipeline.midnightProvider.submitTx(balancedTx);
     } catch (error) {
       throw new Error(`ACCESS_SUBMIT:${getErrorMessage(error)}`);
     }
-    return {
-      success: submitResult.submitted,
-      confirmed: submitResult.confirmed,
-      txHash: submitResult.txHash ?? undefined,
-      wallet: submitResult.wallet,
-      status: submitResult.status,
-      rawResult: submitResult.rawResult,
-    };
+    if (!txId) throw new Error("Proof submitted but no transaction ID was returned.");
+    return txId;
   }
 
   private async readContractLedger(contractId: string): Promise<{
@@ -1376,7 +1094,7 @@ export class MidnightClient {
   } | null> {
     if (!this.session) throw new Error("WALLET_NOT_CONNECTED");
     const [{ ledger }, { ContractState }] = await Promise.all([
-      import("../../public/contract/Midnight/contract/index.js"),
+      import("../../public/contract/Privora/contract/index.js"),
       import("@midnight-ntwrk/compact-runtime"),
     ]);
     const query =
@@ -1421,7 +1139,7 @@ export class MidnightClient {
     const chainAddress = toChainContractAddress(contractId);
 
     const [{ Contract }, { CompiledContract }, { createUnprovenCallTx }] = await Promise.all([
-      import("../../public/contract/Midnight/contract/index.js"),
+      import("../../public/contract/Privora/contract/index.js"),
       import("@midnight-ntwrk/compact-js"),
       import("@midnight-ntwrk/midnight-js-contracts"),
     ]);
@@ -1453,16 +1171,7 @@ export class MidnightClient {
         throw new Error("CREDENTIAL_NOT_ADMIN");
       }
       if (contractLedger.valid_credentials.findPathForLeaf(credentialHash)) {
-        return {
-          success: true,
-          confirmed: true,
-          txId: null,
-          txHash: undefined,
-          credentialHash,
-          alreadyEnrolled: true,
-          wallet: this.walletKind(),
-          status: "already_enrolled",
-        };
+        return { txId: null, credentialHash, alreadyEnrolled: true };
       }
     } catch (error) {
       const message = getErrorMessage(error);
@@ -1480,8 +1189,8 @@ export class MidnightClient {
       },
       get_caller: (context: { privateState: unknown }) => [context.privateState, callerBytes] as [unknown, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Midnight", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
+    const compiledContract = CompiledContract.make("Privora", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
 
     // Final assert: never pass 0x into createUnprovenCallTx (SDK TypeError).
     const sdkContractAddress = toChainContractAddress(chainAddress);
@@ -1515,6 +1224,7 @@ export class MidnightClient {
     const proofProvider = (providers as unknown as {
       proofProvider: { proveTx: (tx: unknown) => Promise<SerializedTransaction> };
       walletProvider: { balanceTx: (tx: SerializedTransaction) => Promise<SerializedTransaction> };
+      midnightProvider: { submitTx: (tx: SerializedTransaction) => Promise<string> };
     });
 
     let provenTx: SerializedTransaction;
@@ -1533,24 +1243,14 @@ export class MidnightClient {
       throw new Error(`CREDENTIAL_BALANCE:${getErrorMessage(error)}`);
     }
 
-    let submitResult: WalletSubmitResult;
+    let txId: string;
     try {
-      this.transactionSubmitContext = "credential";
-      submitResult = await this.submitBalancedTransaction(balancedTx, "credential");
+      txId = await proofProvider.midnightProvider.submitTx(balancedTx);
     } catch (error) {
       throw new Error(`CREDENTIAL_SUBMIT:${getErrorMessage(error)}`);
     }
-    return {
-      success: submitResult.submitted,
-      confirmed: submitResult.confirmed,
-      txId: submitResult.txHash,
-      txHash: submitResult.txHash ?? undefined,
-      credentialHash,
-      alreadyEnrolled: false,
-      wallet: submitResult.wallet,
-      status: submitResult.status,
-      rawResult: submitResult.rawResult,
-    };
+    if (!txId) throw new Error("CREDENTIAL_SUBMITTED_NO_ID");
+    return { txId, credentialHash, alreadyEnrolled: false };
   }
 
   async waitForCredentialEnrollment(
@@ -1579,9 +1279,6 @@ export class MidnightClient {
     const message = getErrorMessage(error);
     const lower = message.toLowerCase();
     if (message === "NO_WALLET") return "No compatible Midnight wallet was found. Install or enable a wallet extension, then reload this page.";
-    if (message === "WALLET_CONNECT_PENDING" || message === "WALLET_CONNECT_ALREADY_PENDING" || lower.includes("connection request already pending")) {
-      return "Connection request already open in Lace. Approve or reject it there.";
-    }
     if (message === "PREPROD_REQUIRED") return "Wrong network. This dApp only supports Midnight Preprod. Please switch your wallet to Preprod and reconnect.";
     if (message.startsWith("NETWORK_MISMATCH:")) {
       const actual = message.slice("NETWORK_MISMATCH:".length);
@@ -1600,18 +1297,18 @@ export class MidnightClient {
     if (message.includes("User rejected") || lower.includes("rejected")) return "The wallet request was canceled. Connect the wallet again when you are ready.";
     if (message === "CREDENTIAL_REQUIRED") return "A valid gate credential is required. Ask the gate administrator to issue access before submitting a proof.";
     if (message === "CREDENTIAL_FORMAT") return "Credentials must be exactly 32 bytes. The value stays in this browser and is never displayed after submission.";
-    if (message === "CREDENTIAL_NOT_ENROLLED") return "We couldn't verify this credential. It may be incorrect, expired, revoked, or already used. Ask the gate administrator for a new credential.";
+    if (message === "CREDENTIAL_NOT_ENROLLED") return "This credential is not enrolled for the selected gate, or the gate state is not available yet.";
     if (message === "CREDENTIAL_NOT_ADMIN") return "Only the original administrator wallet that deployed this gate can enroll credentials. Reconnect that same wallet on the gate network and try again.";
-    if (message.startsWith("ACCESS_PREPARE:")) return "We couldn't verify this credential. It may be incorrect, expired, revoked, or already used. Ask the gate administrator for a new credential.";
+    if (message.startsWith("ACCESS_PREPARE:")) return `The access proof could not be prepared: ${message.slice("ACCESS_PREPARE:".length)}`;
     if (message.startsWith("ACCESS_PROVE:")) {
       const detail = message.slice("ACCESS_PROVE:".length);
       if (detail.includes("__wbg_ptr") || lower.includes("wasm")) {
         return "Access proof generation hit a Midnight WASM binding error. Hard-reload, reconnect your wallet on the gate network, and try again.";
       }
-      return "We couldn't verify this credential. It may be incorrect, expired, revoked, or already used. Ask the gate administrator for a new credential.";
+      return `Access proof generation failed: ${detail}`;
     }
-    if (message.startsWith("ACCESS_BALANCE:")) return "Your wallet could not prepare the access request. Check that it is connected to Preprod, then try again.";
-    if (message.startsWith("ACCESS_SUBMIT:")) return "The wallet did not submit the access request. Approve the request in your wallet, then try again.";
+    if (message.startsWith("ACCESS_BALANCE:")) return `The wallet could not balance the access proof transaction: ${message.slice("ACCESS_BALANCE:".length)}`;
+    if (message.startsWith("ACCESS_SUBMIT:")) return `The wallet rejected the access proof submission: ${message.slice("ACCESS_SUBMIT:".length)}`;
     if (message.startsWith("CREDENTIAL_PREPARE:")) return `The credential enrollment transaction could not be prepared: ${message.slice("CREDENTIAL_PREPARE:".length)}`;
     if (message.startsWith("CREDENTIAL_PROVE:")) {
       const detail = message.slice("CREDENTIAL_PROVE:".length);
@@ -1620,8 +1317,8 @@ export class MidnightClient {
       }
       return `Proof generation for credential enrollment failed: ${detail}`;
     }
-    if (message.startsWith("CREDENTIAL_BALANCE:")) return "Your wallet could not prepare the credential enrollment. Check that it is connected to Preprod, then try again.";
-    if (message.startsWith("CREDENTIAL_SUBMIT:")) return "The wallet did not submit the credential enrollment. Approve the request in your wallet, then try again.";
+    if (message.startsWith("CREDENTIAL_BALANCE:")) return `The wallet could not balance the enrollment transaction (fees/DUST): ${message.slice("CREDENTIAL_BALANCE:".length)}`;
+    if (message.startsWith("CREDENTIAL_SUBMIT:")) return `The wallet rejected the enrollment submission: ${message.slice("CREDENTIAL_SUBMIT:".length)}`;
     if (message.startsWith("CREDENTIAL_TRANSACTION:")) {
       const detail = message.slice("CREDENTIAL_TRANSACTION:".length);
       if (detail.includes("__wbg_ptr")) {
@@ -1630,9 +1327,10 @@ export class MidnightClient {
       return `The credential enrollment transaction failed: ${detail}`;
     }
     if (message.startsWith("CREDENTIAL_HASH:")) return "The private credential could not be converted into its on-chain allowlist hash. Generate a new credential and retry.";
-    if (message.startsWith("CREDENTIAL_CHECK:")) return `Midnight could not check whether this credential is already enrolled: ${message.slice("CREDENTIAL_CHECK:".length)}`;
+    if (message.startsWith("CREDENTIAL_CHECK:")) return `Privora could not check whether this credential is already enrolled: ${message.slice("CREDENTIAL_CHECK:".length)}`;
     if (message.startsWith("CREDENTIAL_CONFIRM_FAILED:")) return `The credential enrollment transaction was rejected on-chain: ${message.slice("CREDENTIAL_CONFIRM_FAILED:".length)}`;
     if (message.startsWith("CREDENTIAL_CONFIRM:")) return `The credential enrollment is still pending. Do not submit it again until the Midnight indexer confirms the first transaction. (${message.slice("CREDENTIAL_CONFIRM:".length)})`;
+    if (message === "CREDENTIAL_SUBMITTED_NO_ID") return "The credential enrollment request completed without a transaction reference. Check the gate state before retrying to avoid enrolling twice.";
     if (lower.includes("__wbg_ptr")) {
       return "A Midnight WASM module failed to bind (often after a hot reload). Hard-reload the page, reconnect the wallet on the gate network, and try again.";
     }
@@ -1642,20 +1340,20 @@ export class MidnightClient {
     if (message === "WALLET_DISCONNECTED") return "The wallet did not keep the connection open. Unlock it, keep the extension open, and try again.";
     if (message.startsWith("DEPLOY_ZK_ASSETS:")) return `A deployment proof asset could not be loaded. Verify this URL is reachable, then retry: ${message.slice("DEPLOY_ZK_ASSETS:".length)}`;
     if (message.startsWith("DEPLOY_PROVER:")) return "The wallet could not initialize proof generation. Unlock the wallet, verify the selected Midnight network, and retry.";
-    if (message.startsWith("DEPLOY_PROVIDER:")) return "Publishing could not start. Reconnect your Preprod wallet and try again.";
+    if (message.startsWith("DEPLOY_PROVIDER:")) return `Deployment setup failed before wallet approval: ${message.slice("DEPLOY_PROVIDER:".length)}`;
     if (message.startsWith("DEPLOY_KEY:")) {
       const detail = message.slice("DEPLOY_KEY:".length);
       if (detail.includes("KEY_NETWORK:")) return `The wallet returned a key for a different network. Switch to the gate network, reconnect, and retry. (${detail.slice("KEY_NETWORK:".length)})`;
       if (detail.includes("KEY_FORMAT:")) return `Lace returned an unsupported administrator key representation. ${detail.slice("KEY_FORMAT:".length)}`;
       return `The wallet administrator key could not be used for the selected network. ${detail}`;
     }
-    if (message.startsWith("DEPLOY_BUILD:")) return "The gate publish request could not be prepared. Verify the wallet is connected to Preprod and retry.";
-    if (message.startsWith("DEPLOY_PROVE:")) return "The private publish proof could not be generated. Reconnect your wallet and try again.";
-    if (message.startsWith("DEPLOY_BALANCE:")) return "Your wallet could not prepare the publish request. Check wallet permissions and network resources, then try again.";
+    if (message.startsWith("DEPLOY_BUILD:")) return "The deployment transaction could not be constructed. Verify the wallet is connected to the gate network and retry.";
+    if (message.startsWith("DEPLOY_PROVE:")) return `Proof generation failed: ${message.slice("DEPLOY_PROVE:".length)}`;
+    if (message.startsWith("DEPLOY_BALANCE:")) return `Transaction balancing failed. Check wallet permissions and network resources: ${message.slice("DEPLOY_BALANCE:".length)}`;
     if (message.startsWith("DEPLOY_CONFIRM:")) {
       return `The wallet accepted the deploy request, but the Midnight indexer never found a contract at that address. With 1AM this usually means submit failed or the node dropped the tx (history stays empty). Click "Reset & redeploy from scratch", wait 10-15 minutes, reconnect 1AM on the gate network, and deploy once. (${message.slice("DEPLOY_CONFIRM:".length)})`;
     }
-    if (message.startsWith("DUST_EMPTY:")) return "The wallet is not ready to pay for the publish request. Wait for it to finish syncing or refill, then reconnect and retry.";
+    if (message.startsWith("DUST_EMPTY:")) return `The wallet reports zero available DUST, although its DUST capacity is ${message.slice("DUST_EMPTY:".length)}. Wait for the wallet to finish syncing/refilling, then reconnect and retry.`;
     if (message.startsWith("DEPLOY_SUBMIT:")) {
       const rest = message.slice("DEPLOY_SUBMIT:".length);
       const contractMatch = rest.match(/^contractId=([0-9a-f]+):(.*)/i);
@@ -1663,10 +1361,10 @@ export class MidnightClient {
         const [, addr, detail] = contractMatch;
         const lowerDetail = detail.toLowerCase();
         if (lowerDetail.includes("temporarily banned") || lowerDetail.includes("temp banned")) {
-          return `The network temporarily rejected this publish request. It is not confirmed on-chain. Wait 10-15 minutes, then publish once again. Do not retry repeatedly. Derived address: ${addr}.`;
+          return `The network rejected this deploy (transaction temporarily banned). It is not on-chain - 1AM history will stay empty. Wait 10-15 minutes, click "Reset & redeploy from scratch", then Deploy once. Do not spam Deploy. (Derived address was ${addr}.)`;
         }
         if (lowerDetail.includes("no transaction id") || lowerDetail.includes("history is empty")) {
-          return `1AM signed but did not return a transaction id, so the publish request may not have landed. Wait a few minutes, then restore or publish once. Derived address: ${addr}. Detail: ${detail}`;
+          return `1AM signed but did not return a transaction id, so the deploy almost certainly never landed. Wait, Reset & redeploy, then try once. (Derived address: ${addr}.) Detail: ${detail}`;
         }
         return `The wallet reported an error after you signed. The tx may still have reached the node - use "Check deployment confirmation" once, or paste this address into "Restore published gate": ${addr}. Error detail: ${detail}`;
       }

@@ -1,89 +1,234 @@
 @import "tailwindcss";
 
+/*
+  Privora light visual system.
+  Warm paper surfaces, serif display headlines, quiet UI text, and green proof accents.
+*/
+
 @theme {
-  --color-surface: #f7f8f5;
+  --color-primary: #17181a;
+  --color-muted: #85837c;
+  --color-faint: #a3a199;
+  --color-surface: #f6f5f1;
+  --color-background: #f6f5f1;
+  --color-on-surface: #17181a;
+  --color-surface-raised: #ffffff;
+  --color-secondary: #edebe5;
   --color-card: #ffffff;
-  --color-primary: #17191f;
-  --color-muted: #5d6575;
-  --color-faint: #858d9c;
-  --color-dark: #111827;
-  --color-secondary: #eef2f0;
-  --color-accent: #0f766e;
-  --color-accent-dim: #e6f5f2;
-  --color-accent-soft: #5bb8ad;
-  --color-border-subtle: #dde3df;
-  --font-display: Inter, ui-sans-serif, system-ui, sans-serif;
+  --color-dark: #14161a;
+  --color-border-subtle: #e3e1da;
+
+  --color-accent: #3f7d58;
+  --color-accent-hover: #346a4a;
+  --color-accent-pressed: #2d5f41;
+  --color-accent-soft: #8fb59c;
+  --color-accent-muted: #3f7d58;
+  --color-accent-faint: #5f8f70;
+  --color-accent-dim: #e7efe9;
+
+  --color-emerald-50: #eef7f1;
+  --color-emerald-100: #d9ebde;
+  --color-emerald-200: #b8d8c2;
+  --color-emerald-300: #8fb59c;
+  --color-emerald-400: #65966f;
+  --color-emerald-500: #3f7d58;
+  --color-emerald-600: #346a4a;
+  --color-emerald-700: #2b553d;
+  --color-emerald-800: #244532;
+  --color-emerald-900: #1f3a2b;
+
+  --color-amber-100: #fff7df;
+  --color-amber-200: #f3d88a;
+  --color-amber-300: #d39b2c;
+  --color-red-100: #fff0ee;
+  --color-red-200: #efb0a9;
+  --color-red-300: #c75045;
+  --color-red-400: #a84239;
+  --color-red-500: #87352f;
+
+  --color-slate-400: #8b8a84;
+  --color-slate-600: #5f5d56;
+
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono", "Fira Code", Menlo, ui-monospace, monospace;
+  --font-mono-stack: var(--font-mono);
+
+  --radius-DEFAULT: 1rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-full: 9999px;
+}
+
+:root {
+  --background: #f6f5f1;
+  --foreground: #17181a;
+  --bg-primary: #f6f5f1;
+  --bg-secondary: #edebe5;
+  --bg-card: #ffffff;
+  --bg-dark: #14161a;
+  --text-primary: #17181a;
+  --text-muted: #85837c;
+  --text-faint: #a3a199;
+  --accent-green: #3f7d58;
+  --border-subtle: #e3e1da;
 }
 
 html {
-  background: #f7f8f5;
-  color: #17191f;
+  color-scheme: light;
+  background: var(--bg-primary);
+  scroll-behavior: smooth;
 }
 
 body {
-  min-height: 100vh;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  background:
-    linear-gradient(180deg, rgba(230, 245, 242, 0.7), rgba(247, 248, 245, 0) 32rem),
-    #f7f8f5;
-}
-
-button,
-a,
-input,
-textarea {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
   letter-spacing: 0;
+  word-spacing: 0.02em;
+  font-kerning: normal;
+  font-feature-settings: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #0f766e;
+p,
+li,
+label,
+span,
+button,
+input,
+textarea,
+a {
+  letter-spacing: 0;
+  word-spacing: 0.02em;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 0;
+  word-spacing: 0.02em;
+}
+
+.font-mono,
+code {
+  font-family: var(--font-mono), var(--font-mono-stack);
+  letter-spacing: 0;
+  word-spacing: normal;
+}
+
+* {
+  border-color: var(--border-subtle);
+}
+
+::selection {
+  background: #3f7d58;
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid #3f7d58;
+  outline-offset: 3px;
+}
+
+.btn-midnight,
+.btn-primary {
+  border-radius: 9999px;
+  background-color: #14161a;
+  color: #ffffff;
+  font-weight: 600;
+  transition: transform 160ms ease, background-color 160ms ease, opacity 160ms ease;
+}
+
+.btn-midnight:hover,
+.btn-primary:hover {
+  background-color: #000000;
+}
+
+.btn-midnight:disabled,
+.btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-midnight-outline,
+.btn-secondary {
+  border: 1px solid #17181a;
+  border-radius: 9999px;
+  background: transparent;
+  color: #17181a;
+  font-weight: 600;
+  transition: background-color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+.btn-midnight-outline:hover,
+.btn-secondary:hover {
+  background-color: #edebe5;
 }
 
 .paper-card {
-  border: 1px solid #dde3df;
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 1.125rem;
   background: #ffffff;
-  box-shadow: 0 10px 30px rgba(18, 24, 38, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
 }
 
-.field-label {
-  display: block;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #17191f;
+.eyebrow {
+  font-family: var(--font-mono), var(--font-mono-stack);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
-.field-input {
-  min-height: 2.75rem;
-  width: 100%;
-  border-radius: 8px;
-  border: 1px solid #dde3df;
-  background: #ffffff;
-  padding: 0.75rem 0.875rem;
-  font-size: 0.9rem;
-  color: #17191f;
-  outline: none;
+.terminal-card {
+  border-radius: 0.75rem;
+  background: #14161a;
+  color: #e8e6df;
+  box-shadow: 0 8px 28px rgba(20, 22, 26, 0.16);
+  overflow: hidden;
 }
 
-.field-input:focus {
-  border-color: #5bb8ad;
-  box-shadow: 0 0 0 3px rgba(91, 184, 173, 0.2);
-}
-
-.nav-progress-bar {
-  animation: nav-progress 1.1s ease-in-out infinite;
-  background: #0f766e;
+.traffic-dot {
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+  border-radius: 9999px;
 }
 
 @keyframes nav-progress {
   0% {
-    transform: translateX(-100%);
+    transform: translateX(-120%);
   }
   100% {
     transform: translateX(320%);
+  }
+}
+
+.nav-progress-bar {
+  animation: nav-progress 1.1s ease-in-out infinite;
+  background-color: #3f7d58;
+}
+
+.midnight-step {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: #3f7d58;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }
