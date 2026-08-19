@@ -11,23 +11,15 @@
   <img src="https://img.shields.io/badge/1AM_Wallet-FF5733?style=for-the-badge" alt="1AM Wallet" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
 
-<br /><br />
-
-  <h3>
-    🌐 <a href="#">Live Demo Website</a>
-    &nbsp;&nbsp;•&nbsp;&nbsp;
-    🎬 <a href="#-demo">Demo Video Walkthrough</a>
-    &nbsp;&nbsp;•&nbsp;&nbsp;
-    🏗 <a href="#-architecture">Architecture</a>
-  </h3>
-
+<br />
   <br />
-  <a href="">
+  <a href="https://github.com/rishiisarkar/Nexora/actions/runs/32278800387">
     <img src="https://img.shields.io/badge/CI%2FCD-passing-brightgreen?style=for-the-badge" alt="CI/CD Pipeline Status" />
   </a>
 </div>
 <br />
-<img width="2534" height="1314" alt="image" src="https://github.com/user-attachments/assets/f24ed750-4d7c-4a84-8402-026a6d941047" />
+<img width="1901" height="918" alt="Screenshot 2026-08-19 223024" src="https://github.com/user-attachments/assets/84b1e036-f2d8-44ca-84c7-507dd0371f7c" />
+
 <br />
 <br />
 
@@ -40,6 +32,7 @@
 ## 🌐 Live Demo
 [https://nexora-app-web3.vercel.app/](https://nexora-app-web3.vercel.app/)
 
+## **Demo Video** [Watch the Nexora Demo Video on Google Drive](https://drive.google.com/file/d/1cAb_dis5CkSjRz4XW3x5RSnGYpUv2BDh/view?usp=sharing)
 ---
 
 ## 📋 Quick Links & CheckList
@@ -47,7 +40,7 @@
 | ----------- | -------------------------------------------------------------------- |
 | **🌐Live Demo** | [https://nexora-app-web3.vercel.app/](https://nexora-app-web3.vercel.app/) |
 | **Preprod** | `0x85c6d5ce4fec74c33a17d4307290bf7d05878637b9f2e70bead1d90bdf5353cc` |
-| **Demo Video** |[Watch the Nexora Demo Video on Google Drive](https://drive.google.com/file/d/1kORStuYk75lLGvJRnh2td8-BcJ3vEhAo/view?usp=sharing) |
+| **Demo Video** |[Watch the Nexora Demo Video on Google Drive](https://drive.google.com/file/d/1cAb_dis5CkSjRz4XW3x5RSnGYpUv2BDh/view?usp=sharing) |
 | CI/CD pipeline running (workflow file + passing runs)                 |               ✅ **Passed**                |
 
 > Preprod deployed. Verify the new address on [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/85c6d5ce4fec74c33a17d4307290bf7d05878637b9f2e70bead1d90bdf5353cc) 
@@ -83,6 +76,7 @@
 
 
 ### 3. CI & CD Running 
+<img width="1915" height="658" alt="Screenshot 2026-08-19 223155" src="https://github.com/user-attachments/assets/235632aa-710e-4ac8-9b63-af10c8cc1901" />
 
 
 ### 4. Commit Over 30 meaningful commits   ✅ **Passed**  
@@ -112,7 +106,7 @@
 
 ## 🎬 Demo-Video
 
-[Watch the Nexora Demo Video on Google Drive](https://drive.google.com/file/d/1kORStuYk75lLGvJRnh2td8-BcJ3vEhAo/view?usp=sharing)
+[Watch the Nexora Demo Video on Google Drive](https://drive.google.com/file/d/1cAb_dis5CkSjRz4XW3x5RSnGYpUv2BDh/view?usp=sharing)
 
 ### What to Record (Under 2 Minutes)
 
@@ -431,15 +425,6 @@ Nexora/
 
 ---
 
-## 📸 Application Interface
-
-|           Landing Page           |           Admin Dashboard            |
-| :------------------------------: | :----------------------------------: |
-| _[placeholder — add screenshot]_ |   _[placeholder — add screenshot]_   |
-|      **Deploy Access Gate**      | **Member Access / Proof Generation** |
-| _[placeholder — add screenshot]_ |   _[placeholder — add screenshot]_   |
-
----
 
 ## 🧪 Testing
 
@@ -472,10 +457,10 @@ A GitHub Actions workflow compiles the Compact contract and runs the full test s
 .github/workflows/ci.yml
 ```
 
-_[placeholder — add CI/CD badge once workflow is live, e.g.]_
+<img width="1915" height="658" alt="Screenshot 2026-08-19 223155" src="https://github.com/user-attachments/assets/235632aa-710e-4ac8-9b63-af10c8cc1901" />
 
 ```md
-[![CI/CD Pipeline Status](https://github.com/Rimanshu-Singh/Nexora/actions/workflows/ci.yml/badge.svg)](https://github.com/Rimanshu-Singh/Nexora/actions/workflows/ci.yml)
+[![CI/CD Pipeline Status](https://github.com/rishiisarkar/Nexora/actions/runs/32278800387)](https://github.com/rishiisarkar/Nexora/actions/workflows/ci.yml)
 ```
 
 ---
@@ -517,20 +502,6 @@ Replay attacks are prevented using cryptographic nullifiers — every proof is s
 
 ---
 
-## 🔮 Future Roadmap
-
-- [ ] Multi-gate management
-- [ ] Expiring credentials
-- [ ] Anonymous DAO voting
-- [ ] Enterprise identity verification
-- [ ] API access gateway
-- [ ] Multi-admin governance
-- [ ] zkBadge support
-- [ ] NFT private membership
-- [ ] OAuth integration
-- [ ] Cross-chain proof verification
-
----
 
 ## 🤝 Contributing
 
