@@ -69,11 +69,11 @@ jobs:
         run: npm ci
 
       - name: Lint frontend
-        run: npm run lint
+        run: npm run lint --workspace=app
 
       - name: Build frontend
-        run: npm run build 
-
+        run: npm run build --workspace=app
+        
   deployment-ready:
     name: Deployment ready
     runs-on: ubuntu-latest
