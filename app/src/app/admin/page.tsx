@@ -15,7 +15,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { PrivoraClient, verifyContractIndexed } from "@/lib/midnight-client";
+import { MidnightClient, verifyContractIndexed } from "@/lib/midnight-client";
 import type { TransactionProgressStage, WalletOption } from "@/lib/midnight-client";
 import {
   DEFAULT_GATE,
@@ -89,8 +89,8 @@ function enrollmentLabel(stage: EnrollmentStage): string {
 }
 
 export default function AdminPage() {
-  const clientRef = useRef<PrivoraClient | null>(null);
-  const getClient = () => clientRef.current ?? (clientRef.current = new PrivoraClient());
+  const clientRef = useRef<MidnightClient | null>(null);
+  const getClient = () => clientRef.current ?? (clientRef.current = new MidnightClient());
   // Hydration-safe: start from DEFAULT_GATE, hydrate from localStorage after mount.
   const [gate, setGate] = useState<GateRecord>(DEFAULT_GATE);
   const laceSyncHandled = useRef(false);
@@ -186,7 +186,7 @@ export default function AdminPage() {
       setSelectedWalletName("");
       setSelectedWalletRdns(null);
       setDeploymentStage("error");
-      setDeploymentMessage(PrivoraClient.messageFor(error));
+      setDeploymentMessage(MidnightClient.messageFor(error));
     }
   };
 
@@ -302,7 +302,7 @@ export default function AdminPage() {
         }
       }
       setDeploymentStage("error");
-      setDeploymentMessage(PrivoraClient.messageFor(error));
+      setDeploymentMessage(MidnightClient.messageFor(error));
     }
   };
 
@@ -321,7 +321,7 @@ export default function AdminPage() {
       setDeploymentMessage("The Midnight indexer confirmed the contract deployment.");
     } catch (error) {
       setDeploymentStage("error");
-      setDeploymentMessage(PrivoraClient.messageFor(error));
+      setDeploymentMessage(MidnightClient.messageFor(error));
     }
   };
 
@@ -466,7 +466,7 @@ export default function AdminPage() {
       await getClient().waitForCredentialEnrollment(contractAddress, result.credentialHash);
       completeEnrollment();
     } catch (error) {
-      const message = PrivoraClient.messageFor(error);
+      const message = MidnightClient.messageFor(error);
       if (error instanceof Error && error.message.startsWith("CREDENTIAL_CONFIRM:")) {
         setEnrollmentStage("confirmation_pending");
       } else {
@@ -485,7 +485,7 @@ export default function AdminPage() {
       completeEnrollment();
     } catch (error) {
       setEnrollmentStage("confirmation_pending");
-      setEnrollmentMessage(PrivoraClient.messageFor(error));
+      setEnrollmentMessage(MidnightClient.messageFor(error));
     }
   };
 
@@ -865,7 +865,7 @@ export default function AdminPage() {
                 />
               </div>
               <p className="mt-4 text-sm leading-6 text-muted">
-                Privora hashes the credential locally before enrollment. Only the hash reaches the contract. Keep the raw credential private and share it only with the intended member.
+                Nexora hashes the credential locally before enrollment. Only the hash reaches the contract. Keep the raw credential private and share it only with the intended member.
               </p>
               <StatusBanner tone="info" className="mt-4" title="Privacy notice">
                 Enrollment writes the credential hash into the public allowlist tree. The raw credential is not sent to
@@ -948,7 +948,7 @@ export default function AdminPage() {
                     placeholder="64 hexadecimal characters"
                     className="mt-2 min-h-12 w-full rounded-2xl border border-border-subtle bg-card px-4 font-mono text-xs text-primary outline-none focus:border-accent-soft focus:ring-2 focus:ring-accent/30 disabled:opacity-50"
                   />
-                  <p className="mt-2 text-xs leading-5 text-faint">This field is cleared after confirmation. It is never stored by Privora.</p>
+                  <p className="mt-2 text-xs leading-5 text-faint">This field is cleared after confirmation. It is never stored by Nexora.</p>
                 </div>
                 <button
                   type="submit"

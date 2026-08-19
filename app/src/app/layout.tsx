@@ -5,7 +5,7 @@ import { Splash } from "@/components/Splash";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Privora  -  Midnight",
+  title: "Nexora - Midnight",
   description: "Prove membership without revealing your private credential. Built on Midnight.",
 };
 

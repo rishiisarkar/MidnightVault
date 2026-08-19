@@ -3,7 +3,7 @@ import { platform } from "node:os";
 import { resolve } from "node:path";
 
 const contractsRoot = resolve(import.meta.dirname, "..");
-const sourceFile = "src/privora.compact";
+const sourceFile = "src/midnight.compact";
 const outputDir = "src/managed";
 
 function toWslPath(windowsPath) {

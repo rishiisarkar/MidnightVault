@@ -39,7 +39,7 @@ jobs:
           compact --version
           compact compile --version
 
-      - name: Compile Privora Compact contract
+      - name: Compile Midnight Compact contract
         run: npm run compile --workspace=contracts
 
       - name: Sync Compact artifacts

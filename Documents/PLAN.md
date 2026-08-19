@@ -1,8 +1,8 @@
-# Privora — Project Plan
+# Nexora — Project Plan
 
 ## 1. Project Overview
 
-Privora is a privacy-preserving credential and access verification system built on Midnight.
+Nexora is a privacy-preserving credential and access verification system built on Midnight.
 
 The main goal is simple:
 
@@ -16,7 +16,7 @@ For example, a developer portal may require a valid **Developer Credential**. In
 * it has not been revoked,
 * and the authorization has not already been used when reuse is restricted.
 
-If those conditions are satisfied, Privora returns a valid access result without exposing unnecessary private information.
+If those conditions are satisfied, Nexora returns a valid access result without exposing unnecessary private information.
 
 ---
 
@@ -38,13 +38,13 @@ It only needs an answer to one question:
 
 > **Does this user satisfy the access requirements?**
 
-Privora uses Zero Knowledge proofs to answer that question while keeping the underlying credential information private.
+Nexora uses Zero Knowledge proofs to answer that question while keeping the underlying credential information private.
 
 ---
 
 ## 3. Core System
 
-Privora will have four main parts:
+Nexora will have four main parts:
 
 ### Credential Issuer
 
@@ -59,7 +59,7 @@ A credential can contain conditions such as:
 * expiration time,
 * and other access-related attributes.
 
-Privora will support **multiple trusted issuers**, allowing an application to accept credentials from different approved organizations.
+Nexora will support **multiple trusted issuers**, allowing an application to accept credentials from different approved organizations.
 
 ### Credential Holder
 
@@ -67,7 +67,7 @@ The user holds the credential information privately.
 
 When access is requested, the user proves that their credential satisfies the application's policy without revealing the complete credential.
 
-### Privora Verification Contract
+### Nexora Verification Contract
 
 The Midnight contract verifies the required conditions using private inputs and publicly verifiable state.
 
@@ -82,7 +82,7 @@ It checks whether:
 
 ### Protected Application
 
-An external application integrates Privora and asks for verification before unlocking a protected feature or resource.
+An external application integrates Nexora and asks for verification before unlocking a protected feature or resource.
 
 The application receives the verification result rather than the user's raw credential.
 
@@ -92,7 +92,7 @@ The application receives the verification result rather than the user's raw cred
 
 A credential should not remain valid forever without control.
 
-Privora will therefore support a basic credential lifecycle.
+Nexora will therefore support a basic credential lifecycle.
 
 ### Issuance
 
@@ -111,7 +111,7 @@ Developer Credential
 Valid Until: 30 September 2026
 ```
 
-Privora verifies that the credential is still within its allowed validity period before granting access.
+Nexora verifies that the credential is still within its allowed validity period before granting access.
 
 An expired credential must fail verification.
 
@@ -126,7 +126,7 @@ This is useful when:
 * permissions change,
 * or the credential was issued incorrectly.
 
-Privora checks the revocation state during access verification.
+Nexora checks the revocation state during access verification.
 
 A revoked credential cannot be used to gain access.
 
@@ -134,7 +134,7 @@ A revoked credential cannot be used to gain access.
 
 ## 5. Multiple Credential Issuers
 
-Privora will not depend on one central credential issuer.
+Nexora will not depend on one central credential issuer.
 
 A protected application can define which issuers it trusts.
 
@@ -152,7 +152,7 @@ Accepted Issuers:
 
 A user can prove that their credential came from one of the approved issuers without exposing unnecessary credential information.
 
-This makes Privora useful across different organizations and applications.
+This makes Nexora useful across different organizations and applications.
 
 ---
 
@@ -180,13 +180,13 @@ The user proves privately that their credential satisfies the required role.
 
 The application only needs to know that the requirement was satisfied.
 
-This allows one Privora-based credential system to protect multiple resources with different permissions.
+This allows one Nexora-based credential system to protect multiple resources with different permissions.
 
 ---
 
 ## 7. Time-Based Access
 
-Privora will also support policies where access is valid only during a specific period.
+Nexora will also support policies where access is valid only during a specific period.
 
 Example:
 
@@ -214,11 +214,11 @@ This can be useful for:
 
 ## 8. Protection Against Credential and Proof Reuse
 
-Preventing reuse is an important part of the Privora design.
+Preventing reuse is an important part of the Nexora design.
 
 A valid credential should not automatically mean that the same proof can be copied and replayed.
 
-Privora will use **nullifier-based protection** where required.
+Nexora will use **nullifier-based protection** where required.
 
 A nullifier can represent a specific credential usage under a specific gate, resource, or access period.
 
@@ -294,18 +294,18 @@ The goal is to expose only the information necessary to make access verifiable.
 
 ---
 
-## 11. Privora SDK
+## 11. Nexora SDK
 
-Privora is planned as reusable infrastructure rather than only one standalone application.
+Nexora is planned as reusable infrastructure rather than only one standalone application.
 
-A developer should be able to integrate Privora into another Midnight application without rebuilding the complete credential verification flow.
+A developer should be able to integrate Nexora into another Midnight application without rebuilding the complete credential verification flow.
 
-The project will therefore include an initial **Privora TypeScript SDK/API**.
+The project will therefore include an initial **Nexora TypeScript SDK/API**.
 
 Example integration:
 
 ```ts
-const result = await privora.verifyAccess({
+const result = await nexora.verifyAccess({
   policy: "developer-access"
 });
 
@@ -314,12 +314,12 @@ if (result.verified) {
 }
 ```
 
-The SDK will provide a simple interface around the Privora verification flow.
+The SDK will provide a simple interface around the Nexora verification flow.
 
 Its responsibilities will include:
 
 * requesting access verification,
-* interacting with Privora contracts,
+* interacting with Nexora contracts,
 * preparing the required verification flow,
 * submitting/verifying proof-related transactions,
 * handling verification results,
@@ -334,7 +334,7 @@ The SDK should hide unnecessary blockchain complexity from application developer
 The first version can expose a small API such as:
 
 ```ts
-createPrivoraClient(config)
+createNexoraClient(config)
 
 requestAccess(policyId)
 
@@ -347,15 +347,15 @@ getCredentialStatus()
 
 The goal is to keep the first SDK small.
 
-It only needs to demonstrate that Privora can be integrated into another application as an access-verification layer.
+It only needs to demonstrate that Nexora can be integrated into another application as an access-verification layer.
 
 ---
 
 ## 13. Sample Midnight dApp
 
-A separate sample application will demonstrate a complete Privora integration.
+A separate sample application will demonstrate a complete Nexora integration.
 
-### Privora Developer Portal
+### Nexora Developer Portal
 
 The sample dApp will contain a protected developer resource.
 
@@ -381,9 +381,9 @@ User Holds Credential Privately
       ↓
 User Opens Developer Portal
       ↓
-Portal Calls Privora SDK
+Portal Calls Nexora SDK
       ↓
-Privora Requests Private Verification
+Nexora Requests Private Verification
       ↓
 Compact Circuit Verifies Requirements
       ↓
@@ -394,9 +394,9 @@ SDK Returns Verified Result
 Protected Developer Resource Unlocks
 ```
 
-This sample application is important because it demonstrates that Privora is not only an isolated credential demo.
+This sample application is important because it demonstrates that Nexora is not only an isolated credential demo.
 
-It shows another Midnight application actually using Privora as infrastructure.
+It shows another Midnight application actually using Nexora as infrastructure.
 
 ---
 
@@ -418,7 +418,7 @@ Before verification:
 ```text
 🔒 Developer Resource Locked
 
-Verify your eligibility with Privora.
+Verify your eligibility with Nexora.
 ```
 
 After successful verification:
@@ -436,7 +436,7 @@ The raw credential will not be displayed to the protected application.
 ## 15. Technical Architecture
 
 ```text
-privora/
+nexora/
 │
 ├── contracts/
 │   ├── credential.compact
@@ -450,7 +450,7 @@ privora/
 │       └── types.ts
 │
 ├── app/
-│   └── Privora credential management
+│   └── Nexora credential management
 │
 ├── examples/
 │   └── developer-portal/
@@ -516,8 +516,8 @@ Open Protected Application
 ### Developer Integration Flow
 
 ```text
-Install Privora SDK
-→ Configure Privora Client
+Install Nexora SDK
+→ Configure Nexora Client
 → Define Required Policy
 → Call verifyAccess()
 → Receive Verification Result
@@ -546,7 +546,7 @@ The SDK integration will also include a basic end-to-end test showing:
 
 ```text
 Sample dApp
-→ Privora SDK
+→ Nexora SDK
 → Verification
 → Access Result
 → Protected Feature
@@ -562,8 +562,8 @@ Sample dApp
 | Phase 2 | Expiration and revocation    | Credential lifecycle            |
 | Phase 3 | Role/time policies           | Flexible access rules           |
 | Phase 4 | Nullifier protection         | Replay/reuse prevention         |
-| Phase 5 | Frontend integration         | Complete Privora user flow      |
-| Phase 6 | Privora SDK                  | Reusable TypeScript integration |
+| Phase 5 | Frontend integration         | Complete Nexora user flow      |
+| Phase 6 | Nexora SDK                  | Reusable TypeScript integration |
 | Phase 7 | Sample Developer Portal      | Real SDK integration            |
 | Phase 8 | Tests and Preprod validation | Verified end-to-end flow        |
 | Phase 9 | Documentation and demo       | Submission-ready project        |
@@ -582,7 +582,7 @@ The completed MVP should demonstrate:
 * Role-based access.
 * Time-based access.
 * Nullifier-based protection against unauthorized reuse.
-* A basic Privora TypeScript SDK/API.
+* A basic Nexora TypeScript SDK/API.
 * A separate sample Midnight dApp using the SDK.
 * A real protected resource unlocked only after successful verification.
 * Contract and integration tests.
@@ -593,16 +593,16 @@ The completed MVP should demonstrate:
 
 ## 21. Final Goal
 
-Privora starts with credential-based private access, but the goal is to make that capability reusable.
+Nexora starts with credential-based private access, but the goal is to make that capability reusable.
 
-Instead of every Midnight developer building their own credential verification and privacy logic, an application should be able to integrate Privora and ask:
+Instead of every Midnight developer building their own credential verification and privacy logic, an application should be able to integrate Nexora and ask:
 
 > **“Does this user satisfy my access policy?”**
 
-Privora verifies that privately and returns the minimum result the application needs.
+Nexora verifies that privately and returns the minimum result the application needs.
 
 The user keeps their sensitive credential information private.
 
 The application still gets verifiable access control.
 
-That is the core purpose of Privora.
+That is the core purpose of Nexora.

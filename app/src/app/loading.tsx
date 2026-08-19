@@ -12,7 +12,7 @@ export default function Loading() {
         
         {/* Inner logo SVG */}
         <div className="relative flex h-10 w-10 animate-pulse items-center justify-center text-primary">
-          <Image src="/logo.svg" alt="Privora" width={40} height={40} className="h-full w-full" priority />
+          <Image src="/logo.svg" alt="Nexora" width={40} height={40} className="h-full w-full" priority />
         </div>
       </div>
       <p className="mt-8 animate-pulse font-mono text-xs font-medium uppercase tracking-[0.16em] text-faint">

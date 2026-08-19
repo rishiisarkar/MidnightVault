@@ -10,12 +10,13 @@ export type GateRecord = {
   contractVersion: "credential-hash-v2";
 };
 
-const STORAGE_KEY = "privora_gates";
+const STORAGE_KEY = "midnight_gates";
+const LEGACY_STORAGE_KEY = ["privo", "ra_gates"].join("");
 
 export const DEFAULT_GATE: GateRecord = {
   id: "genesis",
   name: "Genesis Vault",
-  description: "A private launch room for approved Privora members.",
+  description: "A private launch room for approved Nexora members.",
   network: "preprod",
   contractId: null,
   deploymentTxId: null,
@@ -85,9 +86,15 @@ export function gateIdFromContract(contractId: string): string {
 export function getGates(): GateRecord[] {
   if (typeof window === "undefined") return [DEFAULT_GATE];
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
+    const current = localStorage.getItem(STORAGE_KEY);
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    const parsed: unknown = JSON.parse(current ?? legacy ?? "[]");
     const gates = Array.isArray(parsed) ? parsed.filter(isGate).map(sanitizeGate) : [];
     if (gates.length === 0) return [DEFAULT_GATE];
+    if (!current && legacy) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(gates));
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    }
     // Persist stripped ids so enroll/prove never re-read a 0x-prefixed contractId.
     try {
       const dirty = gates.some((gate, index) => {

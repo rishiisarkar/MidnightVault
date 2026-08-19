@@ -50,7 +50,7 @@ export function PageLoadingFallback({ title = "Loading page" }: { title?: string
   return (
     <main className="flex-1 bg-surface px-6 pb-20 pt-24 lg:px-10">
       <div className="mx-auto max-w-5xl">
-        <LoadingState label={title} detail="Preparing the Privora interface for this route." />
+        <LoadingState label={title} detail="Preparing the Nexora interface for this route." />
       </div>
     </main>
   );

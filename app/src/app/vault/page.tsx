@@ -127,7 +127,7 @@ function VaultPageContent() {
             {gate.name} is locked
           </h2>
           <p className="mt-5 max-w-2xl text-base leading-7 text-muted">
-            The protected briefing, launch code, and member next steps stay hidden until Privora confirms a valid
+            The protected briefing, launch code, and member next steps stay hidden until Nexora confirms a valid
             proof in this browser session.
           </p>
           {!published && (

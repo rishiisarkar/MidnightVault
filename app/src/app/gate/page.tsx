@@ -12,7 +12,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
-import { PrivoraClient } from "@/lib/midnight-client";
+import { MidnightClient } from "@/lib/midnight-client";
 import type { TransactionProgressStage, WalletOption } from "@/lib/midnight-client";
 import { vaultUrl } from "@/lib/gate-store";
 import { markGateUnlocked, clearGateAccess } from "@/lib/access-session";
@@ -56,8 +56,8 @@ function stepLabel(step: GateStep): string {
 
 function GatePageContent() {
   const searchParams = useSearchParams();
-  const clientRef = useRef<PrivoraClient | null>(null);
-  const getClient = () => clientRef.current ?? (clientRef.current = new PrivoraClient());
+  const clientRef = useRef<MidnightClient | null>(null);
+  const getClient = () => clientRef.current ?? (clientRef.current = new MidnightClient());
   const { gate, ready } = useGate({
     gate: searchParams.get("gate"),
     contract: searchParams.get("contract"),
@@ -102,7 +102,7 @@ function GatePageContent() {
       setSelectedWalletName("");
       setSelectedWalletRdns(null);
       setStep("error");
-      setMessage(PrivoraClient.messageFor(error));
+      setMessage(MidnightClient.messageFor(error));
     }
   };
 
@@ -129,7 +129,7 @@ function GatePageContent() {
       setStep("confirmed");
     } catch (error) {
       setStep("error");
-      setMessage(PrivoraClient.messageFor(error));
+      setMessage(MidnightClient.messageFor(error));
     }
   };
 
@@ -204,7 +204,7 @@ function GatePageContent() {
               {step === "confirmed" ? "The gate is open" : "Verify without revealing"}
             </h2>
             <p className="mt-3 text-sm leading-6 text-muted">
-              Privora proves that your private credential belongs to this gate. The credential itself is never
+              Nexora proves that your private credential belongs to this gate. The credential itself is never
               displayed in the result.
             </p>
             <div className="mt-6 rounded-2xl border border-border-subtle bg-surface p-4 text-xs leading-5 text-muted">
@@ -341,8 +341,8 @@ function GatePageContent() {
                     </label>
                     <p id="credential-help" className="mt-2 text-sm leading-6 text-muted">
                       Paste the <strong className="font-semibold text-primary">raw secret</strong> the operator sent you
-                      (64 hex characters). Privora hashes it locally and proves the hash is on the allowlist. The
-                      secret is cleared before proof generation and never stored by Privora.
+                      (64 hex characters). Nexora hashes it locally and proves the hash is on the allowlist. The
+                      secret is cleared before proof generation and never stored by Nexora.
                     </p>
                     <StatusBanner tone="info" className="mt-4" title="What becomes public">
                       The contract checks a public allowlist root and records a public nullifier after success. It does

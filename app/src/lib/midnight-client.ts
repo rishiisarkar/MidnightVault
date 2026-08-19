@@ -216,13 +216,41 @@ function walletKeyToString(value: unknown): string {
   throw new Error("Wallet returned an unsupported key format.");
 }
 
-const SIGNING_KEY_STORAGE = "privora_signing_keys";
+const SIGNING_KEY_STORAGE = "midnight_signing_keys";
+const LEGACY_SIGNING_KEY_STORAGE = ["privo", "ra_signing_keys"].join("");
+
+function getStorageJson(key: string): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const value = window.localStorage.getItem(key);
+    if (!value) return {};
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+function migrateSigningKeyStorage(): Record<string, string> {
+  const current = getStorageJson(SIGNING_KEY_STORAGE);
+  const legacy = getStorageJson(LEGACY_SIGNING_KEY_STORAGE);
+  const merged = { ...legacy, ...current };
+  if (typeof window !== "undefined" && Object.keys(legacy).length > 0) {
+    try {
+      window.localStorage.setItem(SIGNING_KEY_STORAGE, JSON.stringify(merged));
+      window.localStorage.removeItem(LEGACY_SIGNING_KEY_STORAGE);
+    } catch {
+      // localStorage may be unavailable; in-memory privateStateProvider still works for this session.
+    }
+  }
+  return merged;
+}
 
 function persistSigningKey(contractAddress: string, signingKey: unknown): void {
   if (typeof window === "undefined" || signingKey == null) return;
   try {
     const serialized = typeof signingKey === "string" ? signingKey : JSON.stringify(signingKey);
-    const store = JSON.parse(window.localStorage.getItem(SIGNING_KEY_STORAGE) ?? "{}") as Record<string, string>;
+    const store = migrateSigningKeyStorage();
     // Store under bare hex (SDK form) and legacy 0x form for older sessions.
     const chain = contractAddress.replace(/^0x/i, "").toLowerCase();
     store[chain] = serialized;
@@ -237,7 +265,7 @@ function persistSigningKey(contractAddress: string, signingKey: unknown): void {
 function loadSigningKey(contractAddress: string): unknown | null {
   if (typeof window === "undefined") return null;
   try {
-    const store = JSON.parse(window.localStorage.getItem(SIGNING_KEY_STORAGE) ?? "{}") as Record<string, string>;
+    const store = migrateSigningKeyStorage();
     let raw: string | undefined;
     for (const key of contractAddressCandidates(contractAddress)) {
       if (store[key]) {
@@ -373,7 +401,7 @@ function createPrivateStateProvider() {
   };
 }
 
-export class PrivoraClient {
+export class MidnightClient {
   public api: WalletApi | null = null;
   public addresses: WalletAddresses | null = null;
   public session: SessionInfo | null = null;
@@ -484,7 +512,7 @@ export class PrivoraClient {
   }
 
   /**
-   * Clear the local Privora wallet session.
+   * Clear the local Midnight wallet session.
    * If the extension exposes disconnect(), call it so the dApp is no longer authorized.
    */
   async disconnect(): Promise<void> {
@@ -537,7 +565,7 @@ export class PrivoraClient {
       ]);
 
     setNetworkId(this.session.networkId);
-    const assetBaseUrl = new URL("/contract/Privora/", window.location.origin).toString();
+    const assetBaseUrl = new URL("/contract/Midnight/", window.location.origin).toString();
     const zkConfigProvider = new FetchZkConfigProvider(assetBaseUrl, window.fetch.bind(window));
     for (const circuitId of ["add_valid_credential", "verify_access"] as const) {
       try {
@@ -689,7 +717,7 @@ export class PrivoraClient {
         // and confirmed on-chain. Return a pseudo-id so the caller can proceed to indexer-based
         // confirmation polling (which uses contractAddress, not txId).
         if (this.isOneAmWallet()) {
-          console.warn("[Privora] 1AM returned no transaction id from submitTransaction - will fall through to indexer confirmation.");
+          console.warn("[Midnight] 1AM returned no transaction id from submitTransaction - will fall through to indexer confirmation.");
           return uint8ArrayToHex(serialized).slice(0, 64);
         }
         // Last resort for Lace: watchable pseudo-id from the sealed bytes.
@@ -760,7 +788,7 @@ export class PrivoraClient {
     }
     const [{ Contract }, { CompiledContract }, { createUnprovenDeployTx }, { sampleSigningKey }] =
       await Promise.all([
-        import("../../public/contract/Privora/contract/index.js"),
+        import("../../public/contract/Midnight/contract/index.js"),
         import("@midnight-ntwrk/compact-js"),
         import("@midnight-ntwrk/midnight-js-contracts"),
         import("@midnight-ntwrk/compact-runtime"),
@@ -770,8 +798,8 @@ export class PrivoraClient {
       get_merkle_path: (_context: unknown, leaf: Uint8Array) => [null, { leaf, path: [] }] as [null, { leaf: Uint8Array; path: never[] }],
       get_caller: () => [null, new Uint8Array(32)] as [null, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Privora", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
+    const compiledContract = CompiledContract.make("Midnight", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
     const publicKey = this.addresses?.shieldedCoinPublicKey ?? this.addresses?.coinPublicKey;
     if (!publicKey || !this.session) throw new Error("Wallet did not return an administrator key.");
     let adminKey: Uint8Array;
@@ -872,7 +900,7 @@ export class PrivoraClient {
     // and does not require a txId.
     if (!txId && this.isOneAmWallet()) {
       console.warn(
-        `[Privora] 1AM returned no transaction id for deploy (contractId=${contractId}). ` +
+        `[Midnight] 1AM returned no transaction id for deploy (contractId=${contractId}). ` +
         `Proceeding to indexer confirmation - the tx may have been broadcast successfully.`,
       );
     }
@@ -1006,7 +1034,7 @@ export class PrivoraClient {
     const chainAddress = toChainContractAddress(contractId);
 
     const [{ Contract }, { CompiledContract }, { createUnprovenCallTx }] = await Promise.all([
-      import("../../public/contract/Privora/contract/index.js"),
+      import("../../public/contract/Midnight/contract/index.js"),
       import("@midnight-ntwrk/compact-js"),
       import("@midnight-ntwrk/midnight-js-contracts"),
     ]);
@@ -1036,8 +1064,8 @@ export class PrivoraClient {
       },
       get_caller: (context: { privateState: unknown }) => [context.privateState, callerBytes] as [unknown, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Privora", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
+    const compiledContract = CompiledContract.make("Midnight", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
 
     const sdkContractAddress = toChainContractAddress(chainAddress);
     providers.privateStateProvider.setContractAddress(sdkContractAddress);
@@ -1094,7 +1122,7 @@ export class PrivoraClient {
   } | null> {
     if (!this.session) throw new Error("WALLET_NOT_CONNECTED");
     const [{ ledger }, { ContractState }] = await Promise.all([
-      import("../../public/contract/Privora/contract/index.js"),
+      import("../../public/contract/Midnight/contract/index.js"),
       import("@midnight-ntwrk/compact-runtime"),
     ]);
     const query =
@@ -1139,7 +1167,7 @@ export class PrivoraClient {
     const chainAddress = toChainContractAddress(contractId);
 
     const [{ Contract }, { CompiledContract }, { createUnprovenCallTx }] = await Promise.all([
-      import("../../public/contract/Privora/contract/index.js"),
+      import("../../public/contract/Midnight/contract/index.js"),
       import("@midnight-ntwrk/compact-js"),
       import("@midnight-ntwrk/midnight-js-contracts"),
     ]);
@@ -1189,8 +1217,8 @@ export class PrivoraClient {
       },
       get_caller: (context: { privateState: unknown }) => [context.privateState, callerBytes] as [unknown, Uint8Array],
     };
-    const compiledContract = CompiledContract.make("Privora", Contract)
-      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Privora"));
+    const compiledContract = CompiledContract.make("Midnight", Contract)
+      .pipe(CompiledContract.withWitnesses(witnesses), CompiledContract.withCompiledFileAssets("/contract/Midnight"));
 
     // Final assert: never pass 0x into createUnprovenCallTx (SDK TypeError).
     const sdkContractAddress = toChainContractAddress(chainAddress);
@@ -1327,7 +1355,7 @@ export class PrivoraClient {
       return `The credential enrollment transaction failed: ${detail}`;
     }
     if (message.startsWith("CREDENTIAL_HASH:")) return "The private credential could not be converted into its on-chain allowlist hash. Generate a new credential and retry.";
-    if (message.startsWith("CREDENTIAL_CHECK:")) return `Privora could not check whether this credential is already enrolled: ${message.slice("CREDENTIAL_CHECK:".length)}`;
+    if (message.startsWith("CREDENTIAL_CHECK:")) return `Nexora could not check whether this credential is already enrolled: ${message.slice("CREDENTIAL_CHECK:".length)}`;
     if (message.startsWith("CREDENTIAL_CONFIRM_FAILED:")) return `The credential enrollment transaction was rejected on-chain: ${message.slice("CREDENTIAL_CONFIRM_FAILED:".length)}`;
     if (message.startsWith("CREDENTIAL_CONFIRM:")) return `The credential enrollment is still pending. Do not submit it again until the Midnight indexer confirms the first transaction. (${message.slice("CREDENTIAL_CONFIRM:".length)})`;
     if (message === "CREDENTIAL_SUBMITTED_NO_ID") return "The credential enrollment request completed without a transaction reference. Check the gate state before retrying to avoid enrolling twice.";

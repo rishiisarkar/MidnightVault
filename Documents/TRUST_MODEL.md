@@ -1,6 +1,6 @@
-# Privora trust model (Level 3 demo)
+# Nexora trust model (Level 3 demo)
 
-This document states what Privora **does** and **does not** guarantee on the selected Midnight network. The Level 1 target is Midnight Preprod. Judges and operators should treat the product as a production-*minded* demo, not a hardened access-control system.
+This document states what Nexora **does** and **does not** guarantee on the selected Midnight network. The Level 1 target is Midnight Preprod. Judges and operators should treat the product as a production-*minded* demo, not a hardened access-control system.
 
 ## On-chain guarantees (when the circuit and network behave as designed)
 
@@ -38,7 +38,7 @@ Deploy signing material and gate metadata are stored best-effort in **localStora
 
 ### 4. Tests
 
-`contracts/tests/privora.test.ts` are **behavioral mocks** of circuit rules (Sets + assertions). They do not run Compact/testkit or the ZK prover. See README “Test instructions”.
+`contracts/tests/midnight.test.ts` are **behavioral mocks** of circuit rules (Sets + assertions). They do not run Compact/testkit or the ZK prover. See README “Test instructions”.
 
 ## Privacy surface (observer)
 

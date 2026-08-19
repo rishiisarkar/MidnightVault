@@ -1,9 +1,9 @@
 ````markdown
-# Privora Architecture
+# Nexora Architecture
 
 ## 1. Project Overview
 
-Privora is a privacy-preserving credential and access-verification dApp built on the Midnight Network.
+Nexora is a privacy-preserving credential and access-verification dApp built on the Midnight Network.
 
 It allows a user to prove that they hold a valid credential or belong to an approved allowlist without revealing:
 
@@ -21,7 +21,7 @@ This document maps every important feature to its actual location in the reposit
 # 2. Full Project Structure
 
 ```text
-PRIVORA/
+NEXORA/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml
@@ -29,7 +29,7 @@ PRIVORA/
 ├── app/
 │   ├── public/
 │   │   ├── contract/
-│   │   │   └── Privora/
+│   │   │   └── Nexora/
 │   │   │       ├── compiler/
 │   │   │       │   └── contract-info.json
 │   │   │       ├── contract/
@@ -115,17 +115,17 @@ PRIVORA/
 │   │   │   ├── keys/
 │   │   │   ├── vault_pass/
 │   │   │   └── zkir/
-│   │   └── privora.compact
+│   │   └── nexora.compact
 │   │
 │   ├── tests/
-│   │   └── privora.test.ts
+│   │   └── nexora.test.ts
 │   │
 │   ├── jest.config.js
 │   └── package.json
 │
 ├── Documents/
 │   ├── DEMO_CHECKLIST.md
-│   ├── midnight_level3_privora_plan.md
+│   ├── midnight_level3_nexora_plan.md
 │   ├── PLAN.md
 │   ├── PROPOSAL.md
 │   └── TRUST_MODEL.md
@@ -144,7 +144,7 @@ PRIVORA/
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│                      Privora Frontend                         │
+│                      Nexora Frontend                         │
 │                 Next.js 16 + React 19                         │
 │                                                              │
 │  Landing Page                                                │
@@ -183,9 +183,9 @@ PRIVORA/
                                │
                                ▼
 ┌──────────────────────────────────────────────────────────────┐
-│                    Privora Compact Contract                   │
+│                    Nexora Compact Contract                   │
 │                                                              │
-│  contracts/src/privora.compact                               │
+│  contracts/src/midnight.compact                               │
 │                                                              │
 │  add_valid_credential                                        │
 │  verify_access                                               │
@@ -231,7 +231,7 @@ It is built using:
 app/
 ├── public/
 │   └── contract/
-│       └── Privora/
+│       └── Nexora/
 │           ├── compiler/
 │           ├── contract/
 │           ├── keys/
@@ -300,15 +300,15 @@ app/src/hooks/useGate.ts
 The generated Compact contract bindings used by the frontend are located in:
 
 ```text
-app/public/contract/Privora/contract/index.js
-app/public/contract/Privora/contract/index.d.ts
+app/public/contract/Midnight/contract/index.js
+app/public/contract/Midnight/contract/index.d.ts
 ```
 
 The proof and verification artifacts are located in:
 
 ```text
-app/public/contract/Privora/keys/
-app/public/contract/Privora/zkir/
+app/public/contract/Midnight/keys/
+app/public/contract/Midnight/zkir/
 ```
 
 ## Midnight SDK responsibility map
@@ -343,7 +343,7 @@ Private state provider initialized
         ↓
 ZK configuration loaded
         ↓
-Privora contract joined or deployed
+Nexora contract joined or deployed
         ↓
 Circuit call submitted
         ↓
@@ -413,7 +413,7 @@ This file gives direct evidence that the frontend includes the required Midnight
 
 # 7. Wallet Connection Architecture
 
-Privora supports Midnight-compatible browser wallets through the dApp Connector API.
+Nexora supports Midnight-compatible browser wallets through the dApp Connector API.
 
 The wallet UI is separated into two main components.
 
@@ -512,7 +512,7 @@ These files should be included in judged source files because they provide the d
 
 # 8. Circuit Call from Frontend
 
-The core Privora circuit is:
+The core Nexora circuit is:
 
 ```text
 verify_access
@@ -521,7 +521,7 @@ verify_access
 The circuit is defined in:
 
 ```text
-contracts/src/privora.compact
+contracts/src/midnight.compact
 ```
 
 The generated binding is located in:
@@ -533,14 +533,14 @@ contracts/src/managed/contract/
 The browser-consumable copy is located in:
 
 ```text
-app/public/contract/Privora/contract/
+app/public/contract/Midnight/contract/
 ```
 
 The ZK proving and verification artifacts are located in:
 
 ```text
-app/public/contract/Privora/keys/
-app/public/contract/Privora/zkir/
+app/public/contract/Midnight/keys/
+app/public/contract/Midnight/zkir/
 ```
 
 ## Frontend circuit flow
@@ -589,7 +589,7 @@ User can open /vault
 
 ## Loading and error states
 
-During proof generation, Privora can represent stages such as:
+During proof generation, Nexora can represent stages such as:
 
 ```text
 Preparing wallet
@@ -620,7 +620,7 @@ This gives judges a direct path to verify that the circuit call is connected to 
 The Compact contract source is located in:
 
 ```text
-contracts/src/privora.compact
+contracts/src/midnight.compact
 ```
 
 ## Contract folder structure
@@ -651,10 +651,10 @@ contracts/
 │   │       ├── verify_access.bzkir
 │   │       └── verify_access.zkir
 │   │
-│   └── privora.compact
+│   └── nexora.compact
 │
 ├── tests/
-│   └── privora.test.ts
+│   └── nexora.test.ts
 │
 ├── jest.config.js
 └── package.json
@@ -665,10 +665,10 @@ contracts/
 ### Editable source
 
 ```text
-contracts/src/privora.compact
+contracts/src/midnight.compact
 ```
 
-This is the main Compact smart contract and the source of the Privora circuits.
+This is the main Compact smart contract and the source of the Nexora circuits.
 
 ### Generated artifacts
 
@@ -683,7 +683,7 @@ These files should not be edited manually.
 ### Browser artifacts
 
 ```text
-app/public/contract/Privora/
+app/public/contract/Midnight/
 ```
 
 The compile and synchronization scripts copy the necessary generated artifacts into the frontend's public directory so the Midnight.js ZK configuration provider can load them.
@@ -800,7 +800,7 @@ contracts/scripts/compile-contract.mjs
 
 Responsibility:
 
-* compile `privora.compact`,
+* compile `nexora.compact`,
 * generate contract bindings,
 * generate prover and verifier keys,
 * generate ZKIR artifacts,
@@ -819,13 +819,13 @@ Responsibility:
 * and publish the browser-consumable artifacts under:
 
 ```text
-app/public/contract/Privora/
+app/public/contract/Midnight/
 ```
 
 ## Artifact flow
 
 ```text
-privora.compact
+nexora.compact
         ↓
 compile-contract.mjs
         ↓
@@ -833,7 +833,7 @@ contracts/src/managed/
         ↓
 sync-artifacts.mjs
         ↓
-app/public/contract/Privora/
+app/public/contract/Midnight/
         ↓
 Midnight.js frontend provider
 ```
@@ -845,7 +845,7 @@ Midnight.js frontend provider
 The contract test file is located at:
 
 ```text
-contracts/tests/privora.test.ts
+contracts/tests/midnight.test.ts
 ```
 
 The Jest configuration is located at:
@@ -918,12 +918,12 @@ This provides reproducible evidence that:
 | Wallet selection and connect    | `app/src/components/WalletConnectModal.tsx`                |
 | Address and disconnect UI       | `app/src/components/WalletSessionBar.tsx`                  |
 | Lace/compatible wallet API      | `@midnight-ntwrk/dapp-connector-api` in `app/package.json` |
-| Compact source                  | `contracts/src/privora.compact`                            |
+| Compact source                  | `contracts/src/midnight.compact`                            |
 | Generated contract binding      | `contracts/src/managed/contract/index.js`                  |
-| Browser contract binding        | `app/public/contract/Privora/contract/index.js`            |
-| `verify_access` prover/verifier | `app/public/contract/Privora/keys/`                        |
-| `verify_access` ZKIR            | `app/public/contract/Privora/zkir/`                        |
-| Contract tests                  | `contracts/tests/privora.test.ts`                          |
+| Browser contract binding        | `app/public/contract/Midnight/contract/index.js`            |
+| `verify_access` prover/verifier | `app/public/contract/Midnight/keys/`                        |
+| `verify_access` ZKIR            | `app/public/contract/Midnight/zkir/`                        |
+| Contract tests                  | `contracts/tests/midnight.test.ts`                          |
 | Product plan                    | `Documents/PLAN.md`                                        |
 | Privacy/trust model             | `Documents/TRUST_MODEL.md`                                 |
 | Product proposal                | `PROPOSAL.md` at repository root                           |
@@ -943,7 +943,7 @@ However, the rejection states that the judge only checked the repository root an
 To make the proposal directly visible to the judging system, keep a root-level copy:
 
 ```text
-PRIVORA/
+NEXORA/
 ├── PROPOSAL.md
 ├── README.md
 ├── app/
@@ -995,8 +995,8 @@ app/src/components/WalletSessionBar.tsx
 app/src/components/ui/LoadingState.tsx
 app/src/components/ui/ProgressPanel.tsx
 app/src/components/ui/StatusBanner.tsx
-contracts/src/privora.compact
-contracts/tests/privora.test.ts
+contracts/src/midnight.compact
+contracts/tests/midnight.test.ts
 PROPOSAL.md
 ```
 
@@ -1021,8 +1021,8 @@ Add a section like this to the root README:
 | Wallet session and disconnect | [`app/src/components/WalletSessionBar.tsx`](./app/src/components/WalletSessionBar.tsx) |
 | Frontend circuit flow | [`app/src/hooks/useGate.ts`](./app/src/hooks/useGate.ts) |
 | Gate verification UI | [`app/src/app/gate/page.tsx`](./app/src/app/gate/page.tsx) |
-| Compact contract | [`contracts/src/privora.compact`](./contracts/src/privora.compact) |
-| Contract tests | [`contracts/tests/privora.test.ts`](./contracts/tests/privora.test.ts) |
+| Compact contract | [`contracts/src/midnight.compact`](./contracts/src/midnight.compact) |
+| Contract tests | [`contracts/tests/midnight.test.ts`](./contracts/tests/midnight.test.ts) |
 | Product proposal | [`PROPOSAL.md`](./PROPOSAL.md) |
 | Project plan | [`Documents/PLAN.md`](./Documents/PLAN.md) |
 | Privacy model | [`Documents/TRUST_MODEL.md`](./Documents/TRUST_MODEL.md) |
@@ -1030,10 +1030,10 @@ Add a section like this to the root README:
 
 ---
 
-# 20. End-to-End Privora Flow
+# 20. End-to-End Nexora Flow
 
 ```text
-1. User opens Privora
+1. User opens Nexora
         ↓
 2. User clicks Connect Wallet
         ↓
@@ -1074,7 +1074,7 @@ Add a section like this to the root README:
 
 # 21. Architecture Summary
 
-Privora uses a clear separation of responsibility:
+Nexora uses a clear separation of responsibility:
 
 ```text
 Wallet UI
