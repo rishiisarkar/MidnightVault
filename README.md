@@ -46,19 +46,19 @@
 | Network     | Address                                                              |
 | ----------- | -------------------------------------------------------------------- |
 | **🌐Live Demo** | [https://nexora-app-web3.vercel.app/](https://nexora-app-web3.vercel.app/) |
-| **Preprod** | `0x4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79` |
+| **Preprod** | `0x85c6d5ce4fec74c33a17d4307290bf7d05878637b9f2e70bead1d90bdf5353cc` |
 | **Demo Video** |[Watch the Nexora Demo Video on Google Drive](https://drive.google.com/file/d/1kORStuYk75lLGvJRnh2td8-BcJ3vEhAo/view?usp=sharing) |
 | CI/CD pipeline running (workflow file + passing runs)                 |               ✅ **Passed**                |
 
-> Preprod deployed. Verify the new address on [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79) 
+> Preprod deployed. Verify the new address on [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/85c6d5ce4fec74c33a17d4307290bf7d05878637b9f2e70bead1d90bdf5353cc) 
 
 ---
 ## 🔎 Explorer Verification (Preview NetWork)
 
 | Resource | Link                                                                                                                                                                        |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Explorer | [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79)                                                                                                        |
-| Contract | [0x4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79) |
+| Explorer | [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/85c6d5ce4fec74c33a17d4307290bf7d05878637b9f2e70bead1d90bdf5353cc)                                                                                                        |
+| Contract | [0x85c6d5ce4fec74c33a17d4307290bf7d05878637b9f2e70bead1d90bdf5353cc](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79) |
 ### 🌓 Level 3 — First Quarter
 
 **Chosen Idea:** _Private Allowlist Access_ — prove membership without revealing identity.
@@ -78,7 +78,8 @@
 <img width="486" height="169" alt="Screenshot 2026-07-22 123954" src="https://github.com/user-attachments/assets/b71b9cdb-8fc5-46d3-9a80-b390b3c44db1" />
 
 ### 2. Deployed on Prepod Network
-<img width="1897" height="916" alt="Screenshot 2026-08-18 215349" src="https://github.com/user-attachments/assets/23e0dfa5-4ceb-4c32-9814-cafd5d9b8c2a" />
+<img width="1815" height="911" alt="image" src="https://github.com/user-attachments/assets/0b105701-ff92-40b1-bdfa-ec4c75c5c06e" />
+
 
 
 ### 3. CI & CD Running 
@@ -106,7 +107,7 @@
 | Lace wallet connect / disconnect implemented                          |                                                                      ✅ **Passed** — Browser DApp Connector API, Lace & 1AM support                                                                       |
 | Circuit called successfully from the frontend                         |                                                         ✅ **Passed** — `verify_access()` runs in local ZK prover, broadcast via contract wrapper                                                         |
 | An observable privacy behavior (something proven without being shown) |                                                ✅ **Passed** — Merkle membership + nullifier check proven locally without revealing the secret credential                                                 |
-| Contract deployed to Preprod with a verifiable address | [0x4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79)|
+| Contract deployed to Preprod with a verifiable address | [0x85c6d5ce4fec74c33a17d4307290bf7d05878637b9f2e70bead1d90bdf5353cc](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79)|
 | Minimum 8 meaningful commits                                          |                                                                                               ✅ **Passed**                                                                                               |
 
 ## 🎬 Demo-Video
