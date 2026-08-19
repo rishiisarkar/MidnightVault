@@ -1,6 +1,6 @@
 <div align="center">
 
-  <h1 align="center">🔐 Privora</h1>
+  <h1 align="center">🔐 Nexora</h1>
   <h3>Privacy-First Zero-Knowledge Access Control on Midnight Network</h3>
   <p><i>Prove you're authorized — without revealing who you are.</i></p>
 
@@ -22,7 +22,7 @@
   </h3>
 
   <br />
-  <a href="https://github.com/Rimanshu-Singh/Privora/actions/runs/29904557079">
+  <a href="">
     <img src="https://img.shields.io/badge/CI%2FCD-passing-brightgreen?style=for-the-badge" alt="CI/CD Pipeline Status" />
   </a>
 </div>
@@ -31,34 +31,34 @@
 <br />
 <br />
 
-> Confidential, production-grade Zero-Knowledge access control gateway built on the Midnight Network. Privora lets users prove they are authorized to access a resource — without ever revealing their identity, wallet history, or the underlying credential.
+> Confidential, production-grade Zero-Knowledge access control gateway built on the Midnight Network. Nexora lets users prove they are authorized to access a resource — without ever revealing their identity, wallet history, or the underlying credential.
 
-**Privora** replaces traditional wallet-based allowlists and token-gated access with a Zero-Knowledge Merkle membership proof. Members prove they hold a valid, enrolled credential and generate a single-use nullifier locally in their browser — nothing sensitive ever touches the chain. Built for the **First Quarter (Level 3)** challenge as part of the **RiseIn & Midnight Foundation "New Moon to Full: Monthly Moonshots on Midnight" Program 2026**.
+**Nexora** replaces traditional wallet-based allowlists and token-gated access with a Zero-Knowledge Merkle membership proof. Members prove they hold a valid, enrolled credential and generate a single-use nullifier locally in their browser — nothing sensitive ever touches the chain. Built for the **First Quarter (Level 3)** challenge as part of the **RiseIn & Midnight Foundation "New Moon to Full: Monthly Moonshots on Midnight" Program 2026**.
 
 ---
 ## 🌒 Moonshots Level 1 → 3 — Requirements & Submission Checklist
 ## 🌐 Live Demo
-[https://privora-new.vercel.app](https://privora-new.vercel.app)
+[https://nexora-app-web3.vercel.app/](https://nexora-app-web3.vercel.app/)
 
 ---
 
 ## 📋 Quick Links & CheckList
 | Network     | Address                                                              |
 | ----------- | -------------------------------------------------------------------- |
-| **🌐Live Demo** | [https://privora-new.vercel.app](https://privora-new.vercel.app) |
-| **Preprod** | `0x8dde1979ba272a8403b5cd30f8bfd6e1da0c4cec386db5babd9633d0b13947b9` |
-| **Demo Video** |[Watch the Privora Demo Video on Google Drive](https://drive.google.com/file/d/1kORStuYk75lLGvJRnh2td8-BcJ3vEhAo/view?usp=sharing) |
+| **🌐Live Demo** | [https://nexora-app-web3.vercel.app/](https://nexora-app-web3.vercel.app/) |
+| **Preprod** | `0x4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79` |
+| **Demo Video** |[Watch the Nexora Demo Video on Google Drive](https://drive.google.com/file/d/1kORStuYk75lLGvJRnh2td8-BcJ3vEhAo/view?usp=sharing) |
 | CI/CD pipeline running (workflow file + passing runs)                 |               ✅ **Passed**                |
 
-> Preprod deployed. Verify the new address on [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/8dde1979ba272a8403b5cd30f8bfd6e1da0c4cec386db5babd9633d0b13947b9) 
+> Preprod deployed. Verify the new address on [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79) 
 
 ---
 ## 🔎 Explorer Verification (Preview NetWork)
 
 | Resource | Link                                                                                                                                                                        |
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Explorer | [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/8dde1979ba272a8403b5cd30f8bfd6e1da0c4cec386db5babd9633d0b13947b9)                                                                                                        |
-| Contract | [0x8dde1979ba272a8403b5cd30f8bfd6e1da0c4cec386db5babd9633d0b13947b9](https://preprod.midnightexplorer.com/contracts/8dde1979ba272a8403b5cd30f8bfd6e1da0c4cec386db5babd9633d0b13947b9) |
+| Explorer | [Midnight Preprod Explorer](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79)                                                                                                        |
+| Contract | [0x4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79) |
 ### 🌓 Level 3 — First Quarter
 
 **Chosen Idea:** _Private Allowlist Access_ — prove membership without revealing identity.
@@ -78,12 +78,13 @@
 <img width="486" height="169" alt="Screenshot 2026-07-22 123954" src="https://github.com/user-attachments/assets/b71b9cdb-8fc5-46d3-9a80-b390b3c44db1" />
 
 ### 2. Deployed on Prepod Network
-<img width="2544" height="1321" alt="Screenshot 2026-07-22 135748" src="https://github.com/user-attachments/assets/aca7ee5c-7e34-41ca-a7fe-adc8c38a265b" />
+<img width="1897" height="916" alt="Screenshot 2026-08-18 215349" src="https://github.com/user-attachments/assets/23e0dfa5-4ceb-4c32-9814-cafd5d9b8c2a" />
+
 
 ### 3. CI & CD Running 
-<img width="2532" height="819" alt="image" src="https://github.com/user-attachments/assets/93bc8cb1-25d8-40be-9cff-4fb64ef0a91e" />
 
-### 4. Commit Over 16 meaningful commits   ✅ **Passed**  
+
+### 4. Commit Over 30 meaningful commits   ✅ **Passed**  
 
 **Submission Checklist**
 
@@ -105,12 +106,12 @@
 | Lace wallet connect / disconnect implemented                          |                                                                      ✅ **Passed** — Browser DApp Connector API, Lace & 1AM support                                                                       |
 | Circuit called successfully from the frontend                         |                                                         ✅ **Passed** — `verify_access()` runs in local ZK prover, broadcast via contract wrapper                                                         |
 | An observable privacy behavior (something proven without being shown) |                                                ✅ **Passed** — Merkle membership + nullifier check proven locally without revealing the secret credential                                                 |
-| Contract deployed to Preprod with a verifiable address | [0x8dde1979ba272a8403b5cd30f8bfd6e1da0c4cec386db5babd9633d0b13947b9](https://preprod.midnightexplorer.com/contracts/8dde1979ba272a8403b5cd30f8bfd6e1da0c4cec386db5babd9633d0b13947b9)|
+| Contract deployed to Preprod with a verifiable address | [0x4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79](https://preprod.midnightexplorer.com/contracts/4c8d8bc1f4ebffa14661465644c523c994a1367bfd0e043a09eca46f96fb7d79)|
 | Minimum 8 meaningful commits                                          |                                                                                               ✅ **Passed**                                                                                               |
 
 ## 🎬 Demo-Video
 
-[Watch the Privora Demo Video on Google Drive](https://drive.google.com/file/d/1kORStuYk75lLGvJRnh2td8-BcJ3vEhAo/view?usp=sharing)
+[Watch the Nexora Demo Video on Google Drive](https://drive.google.com/file/d/1kORStuYk75lLGvJRnh2td8-BcJ3vEhAo/view?usp=sharing)
 
 ### What to Record (Under 2 Minutes)
 
@@ -137,7 +138,7 @@
 
 ## 💡 What This Does
 
-Privora is a privacy-preserving access gateway where:
+Nexora is a privacy-preserving access gateway where:
 
 1. **Admins** deploy an access gate on the Midnight Preprod network and enroll authorized members by hashing their credentials into a Merkle Tree.
 2. **Members** connect their wallet (Lace or 1AM) and paste their secret credential locally in the browser.
@@ -210,7 +211,7 @@ This creates unnecessary privacy risk for a problem that should require zero dis
 
 ## 💡 Solution
 
-Privora introduces a Zero-Knowledge access gateway. Instead of exposing a credential to prove access, the flow is:
+Nexora introduces a Zero-Knowledge access gateway. Instead of exposing a credential to prove access, the flow is:
 
 ```
 Secret Credential
@@ -346,8 +347,8 @@ Only proof validity reaches the blockchain. Secrets remain private forever.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Rimanshu-Singh/Privora.git
-cd Privora
+git clone https://github.com/Rimanshu-Singh/Nexora.git
+cd Nexora
 ```
 
 ### 2. Install Dependencies
@@ -398,7 +399,7 @@ Open `http://localhost:3000` in your browser.
 ## 📁 Project Structure
 
 ```text
-Privora/
+Nexora/
 ├── contracts/
 │   ├── src/
 │   │   └── vault_pass.compact       ← ZK smart contract
@@ -415,7 +416,7 @@ Privora/
 │
 ├── contracts/
 │   ├── src/
-│   │     privora.compact
+│   │     Nexora.compact
 │   ├── tests/
 │   └── compiler/
 │
@@ -473,7 +474,7 @@ A GitHub Actions workflow compiles the Compact contract and runs the full test s
 _[placeholder — add CI/CD badge once workflow is live, e.g.]_
 
 ```md
-[![CI/CD Pipeline Status](https://github.com/Rimanshu-Singh/Privora/actions/workflows/ci.yml/badge.svg)](https://github.com/Rimanshu-Singh/Privora/actions/workflows/ci.yml)
+[![CI/CD Pipeline Status](https://github.com/Rimanshu-Singh/Nexora/actions/workflows/ci.yml/badge.svg)](https://github.com/Rimanshu-Singh/Nexora/actions/workflows/ci.yml)
 ```
 
 ---
@@ -498,7 +499,7 @@ Contracts are deployed through the built-in Admin Dashboard. Each deployment cre
 
 ## 🛡️ Security Model
 
-Privora never stores:
+Nexora never stores:
 
 - Raw credentials
 - Identity information
