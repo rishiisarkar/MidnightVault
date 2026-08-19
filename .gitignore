@@ -5,6 +5,8 @@ node_modules/
 
 # Build / cache
 .next/
+app/.next/
+app/.next-dev.log
 out/
 dist/
 build/
