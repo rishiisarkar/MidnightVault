@@ -1,7 +1,6 @@
 {
   "framework": "nextjs",
+  "buildCommand": "npm run build",
   "installCommand": "npm install",
-  "buildCommand": "npm run build --workspace=app",
-  "outputDirectory": "app/.next",
-  "devCommand": "npm run dev --workspace=app"
+  "devCommand": "npm run dev"
 }
