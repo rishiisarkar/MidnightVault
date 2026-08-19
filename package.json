@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "contracts",
-    "app"
+    "app",
+    "contracts"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=app",
