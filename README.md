@@ -28,6 +28,17 @@
 **Nexora** replaces traditional wallet-based allowlists and token-gated access with a Zero-Knowledge Merkle membership proof. Members prove they hold a valid, enrolled credential and generate a single-use nullifier locally in their browser — nothing sensitive ever touches the chain. Built for the **First Quarter (Level 3)** challenge as part of the **RiseIn & Midnight Foundation "New Moon to Full: Monthly Moonshots on Midnight" Program 2026**.
 
 ---
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [README.md](./README.md) | Complete and concise project overview |
+| [ARCHITECTURE.md](./Documents/Architecture.md) | System architecture, project structure, and implementation details |
+| [PROPOSAL.md](./Documents/PROPOSAL.md) | Product proposal and Zero Knowledge solution overview |
+| [PLAN.md](./Documents/PLAN.md) | Development roadmap and implementation plan |
+| [midnight_level3_privora_plan.md](./Documents/midnight_level3_privora_plan.md) | Original Level 3 project planning and design document |
+| [TRUST_MODEL.md](./Documents/TRUST_MODEL.md) | Privacy model, trust assumptions, and security boundaries |
+---
 ## 🌒 Moonshots Level 1 → 3 — Requirements & Submission Checklist
 ## 🌐 Live Demo
 [https://nexora-app-web3.vercel.app/](https://nexora-app-web3.vercel.app/)
